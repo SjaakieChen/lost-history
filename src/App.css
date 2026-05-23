@@ -1,0 +1,73 @@
+.app {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+}
+
+header h1 {
+  margin: 0 0 0.5rem;
+  font-size: 2rem;
+}
+
+header p {
+  margin: 0 0 1.5rem;
+  color: #555;
+}
+
+.prompt-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.prompt-form label {
+  font-weight: 600;
+}
+
+.prompt-form textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font: inherit;
+  resize: vertical;
+}
+
+.prompt-form button {
+  align-self: flex-start;
+  padding: 0.65rem 1.25rem;
+  border: none;
+  border-radius: 8px;
+  background: #2c4a6e;
+  color: white;
+  font: inherit;
+  cursor: pointer;
+}
+
+.prompt-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error {
+  margin-top: 1rem;
+  color: #a11;
+}
+
+.response {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border-radius: 8px;
+  background: white;
+  border: 1px solid #ddd;
+}
+
+.response h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.response p {
+  margin: 0;
+  white-space: pre-wrap;
+}
