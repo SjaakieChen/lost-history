@@ -20,13 +20,27 @@ export default function App() {
         body: JSON.stringify({ prompt }),
       });
 
-      const data = (await res.json()) as { text?: string; error?: string };
+      const data = (await res.json()) as {
+        text?: string;
+        thoughts?: string;
+        model?: string;
+        thinkingUsed?: boolean;
+        error?: string;
+      };
 
       if (!res.ok) {
         throw new Error(data.error ?? 'Request failed');
       }
 
-      setResponse(data.text ?? '');
+      const parts = [data.text ?? ''];
+      if (data.thoughts) {
+        parts.push(`\n\n[Thoughts]\n${data.thoughts}`);
+      }
+      if (data.model) {
+        parts.push(`\n\n(Model: ${data.model}${data.thinkingUsed ? ', thinking' : ''})`);
+      }
+
+      setResponse(parts.join(''));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong';
       setError(message);

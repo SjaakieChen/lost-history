@@ -1,13 +1,21 @@
-import { GoogleGenAI } from '@google/genai';
-import { GEMINI_MODEL, requireApiKey } from './config.js';
-
-export async function generateText(prompt: string): Promise<string> {
-  const ai = new GoogleGenAI({ apiKey: requireApiKey() });
-
-  const response = await ai.models.generateContent({
-    model: GEMINI_MODEL,
-    contents: prompt,
-  });
-
-  return response.text ?? 'No response text received.';
-}
+export {
+  callLlm,
+  buildFunctionResponseContent,
+  generateText,
+  generateTextFromPrompt,
+  getDefaultModelId,
+  listTextModels,
+  getModelsByTier,
+  resolveModelForTier,
+  GeminiQuotaError,
+  LlmCapabilityError,
+} from './gemini/index.js';
+
+export type {
+  CallLlmOptions,
+  CallLlmResult,
+  GenerateTextOptions,
+  GenerateTextResult,
+  LlmContentBlock,
+  LlmFunctionCall,
+} from './gemini/index.js';
