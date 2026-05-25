@@ -1,5 +1,9 @@
 import type { SpeedTier, ThinkingPower } from '../../shared/gemini-types.js';
-import { getBaseSpeedTierOverride, resolveBaseSlug } from './model-ranking.js';
+import {
+  getBaseSpeedTierOverride,
+  getProbeSpeedTierOverride,
+  resolveBaseSlug,
+} from './model-ranking.js';
 import type { SpeedTierBounds } from './speed-tier-bounds.js';
 import { areSpeedTierBoundsConfigured, getSpeedTierBounds } from './speed-tier-bounds.js';
 
@@ -40,9 +44,13 @@ export function resolveProbeSpeedTier(
   probeKey?: string,
 ): SpeedTier {
   if (probeKey) {
-    const override = getBaseSpeedTierOverride(resolveBaseSlug(probeKey));
-    if (override) {
-      return override;
+    const probeOverride = getProbeSpeedTierOverride(probeKey);
+    if (probeOverride) {
+      return probeOverride;
+    }
+    const baseOverride = getBaseSpeedTierOverride(resolveBaseSlug(probeKey));
+    if (baseOverride) {
+      return baseOverride;
     }
   }
 

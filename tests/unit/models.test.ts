@@ -13,9 +13,9 @@ import {
 import type { TextModelInfo } from '../../shared/gemini-types.js';
 
 describe('resolveTextModel', () => {
-  it('resolves base id to medium variant', () => {
+  it('resolves base id to low variant for gemini-3.1-flash-lite', () => {
     const resolved = resolveTextModel('gemini-3.1-flash-lite');
-    expect(resolved.registryKey).toBe('gemini-3.1-flash-lite-medium');
+    expect(resolved.registryKey).toBe('gemini-3.1-flash-lite-low');
     expect(resolved.apiModelId).toBe('gemini-3.1-flash-lite');
   });
 
@@ -111,7 +111,7 @@ describe('getModelsBySpeedTier', () => {
     expect(ids.every((id) => supportsStructuredOutputCapability(TEXT_MODEL_REGISTRY[id]))).toBe(
       true,
     );
-    expect(ids).toContain('gemini-3.5-flash-minimal');
+    expect(ids).toContain('gemini-3.1-flash-lite-low');
   });
 
   it('filters to strict-json capable models only', () => {
@@ -119,7 +119,7 @@ describe('getModelsBySpeedTier', () => {
     expect(ids.length).toBeGreaterThan(0);
     expect(ids.every((id) => TEXT_MODEL_REGISTRY[id].supportsStrictJson)).toBe(true);
     expect(ids).toContain('openai--gpt-oss-20b-off');
-    expect(ids).toContain('gemini-3.5-flash-minimal');
+    expect(ids).toContain('gemini-3.1-flash-lite-low');
   });
 
   it('returns moderate models when function calling required', () => {
@@ -158,14 +158,14 @@ describe('assertCapability', () => {
 
   it('throws LlmCapabilityError for thinking when unsupported', () => {
     const info: TextModelInfo = {
-      ...TEXT_MODEL_REGISTRY['gemini-3.1-flash-lite-minimal'],
+      ...TEXT_MODEL_REGISTRY['gemini-3.1-flash-lite-low'],
       supportsThinking: false,
     };
     expect(() => assertCapability(info, 'thinking')).toThrow(LlmCapabilityError);
   });
 
   it('does not throw when capability is supported', () => {
-    const info = TEXT_MODEL_REGISTRY['gemini-3.1-flash-lite-minimal'];
+    const info = TEXT_MODEL_REGISTRY['gemini-3.1-flash-lite-low'];
     expect(() => assertCapability(info, 'structuredOutput')).not.toThrow();
     expect(() => assertCapability(info, 'functionCalling')).not.toThrow();
     expect(() => assertCapability(info, 'thinking')).not.toThrow();
@@ -173,13 +173,13 @@ describe('assertCapability', () => {
 });
 
 describe('getDefaultModelId', () => {
-  it('returns env override or gemini-3.5-flash-minimal', () => {
+  it('returns env override or gemini-3.1-flash-lite-low', () => {
     const previous = process.env.GEMINI_DEFAULT_MODEL;
     delete process.env.GEMINI_DEFAULT_MODEL;
-    expect(getDefaultModelId()).toBe('gemini-3.5-flash-minimal');
+    expect(getDefaultModelId()).toBe('gemini-3.1-flash-lite-low');
 
-    process.env.GEMINI_DEFAULT_MODEL = 'gemini-3.1-flash-lite-minimal';
-    expect(getDefaultModelId()).toBe('gemini-3.1-flash-lite-minimal');
+    process.env.GEMINI_DEFAULT_MODEL = 'gemini-3.5-flash-minimal';
+    expect(getDefaultModelId()).toBe('gemini-3.5-flash-minimal');
 
     if (previous === undefined) {
       delete process.env.GEMINI_DEFAULT_MODEL;

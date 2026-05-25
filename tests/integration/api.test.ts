@@ -19,11 +19,11 @@ describe('HTTP API', () => {
       expect(response.body.models.length).toBeGreaterThan(0);
 
       const model = response.body.models.find(
-        (entry: { id: string }) => entry.id === 'gemini-3.1-flash-lite-minimal',
+        (entry: { id: string }) => entry.id === 'gemini-3.1-flash-lite-low',
       );
       expect(model).toMatchObject({
-        id: 'gemini-3.1-flash-lite-minimal',
-        strengthRank: expect.any(Number),
+        id: 'gemini-3.1-flash-lite-low',
+        strengthRank: 1,
         supportsFunctionCalling: true,
         supportsWebSearch: true,
         supportsCodeExecution: false,
@@ -31,7 +31,7 @@ describe('HTTP API', () => {
         supportsStrictJson: true,
         thinkingMode: 'levels',
         speedTier: 'instant',
-        bakedThinkingPower: 'minimal',
+        bakedThinkingPower: 'low',
       });
     });
   });
@@ -41,14 +41,14 @@ describe('HTTP API', () => {
       const spy = vi.spyOn(callLlmModule, 'callLlm').mockResolvedValue({
         text: 'Hello',
         model: 'gemini-3.1-flash-lite',
-        registryKey: 'gemini-3.1-flash-lite-minimal',
+        registryKey: 'gemini-3.1-flash-lite-low',
         thinkingUsed: false,
         thinkingPowerApplied: 'minimal',
         modelSelectedBy: 'tier',
         speedTierRequested: 'instant',
         speedTierUsed: 'instant',
         speedTierDowngraded: false,
-        modelsAttempted: ['gemini-3.1-flash-lite-minimal'],
+        modelsAttempted: ['gemini-3.1-flash-lite-low'],
       });
 
       const response = await request(app)

@@ -10,8 +10,6 @@ Runs per probe: 1
 | openai/gpt-oss-20b | off | none | 95 | 95 | 1/1 |
 | llama-3.3-70b-versatile | off | none | 102 | 102 | 1/1 |
 | llama-3.1-8b-instant | off | none | 122 | 122 | 1/1 |
-| meta-llama/llama-prompt-guard-2-22m | off | none | 153 | 153 | 1/1 |
-| meta-llama/llama-prompt-guard-2-86m | off | none | 162 | 162 | 1/1 |
 | qwen/qwen3-32b | off | none | 184 | 184 | 1/1 |
 | allam-2-7b | off | none | 188 | 188 | 1/1 |
 | gemini-3.1-flash-lite | medium | levels | 837 | 837 | 1/1 |

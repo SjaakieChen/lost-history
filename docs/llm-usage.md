@@ -202,7 +202,7 @@ Not exposed over HTTP; call from server code only.
 2. **Retry on failure** — if a handler returns `ok: false` or `error`, fix arguments or use another tool before finishing.
 3. **`submit_final_answer` last** — only after intended mutations succeeded and outcomes were verified (re-list or re-read state when unsure).
 
-The default `submit_final_answer` tool description reinforces this. Scene-specific wording lives in `SCENE_AGENT_SYSTEM_INSTRUCTION` (`server/scene/scene-agent-tools.ts`).
+The default `submit_final_answer` tool description reinforces this. Scene-specific wording lives in `SCENE_AGENT_SYSTEM_INSTRUCTION` — see [scene-agent.md](./scene-agent.md#agent-run-runsceneagent).
 
 Handlers should return structured success/failure (`{ ok: true }` / `{ ok: false, error: '...' }` or `{ error: '...' }`) so the model can tell whether to retry.
 
@@ -302,31 +302,9 @@ Returns `{ models: TextModelInfo[] }` — ids, `speedTier`, capabilities, `baked
 
 ### `POST /api/scene-agent`
 
-Scene manipulation agent for the game UI. Uses `callLlmAgent` with a **catalog-only** tool set (models pick `catalogId` from `list_available_objects`; they cannot submit voxel data).
+Scene manipulation agent for the game UI. Uses `callLlmAgent` with a **catalog-only** tool set (predefined `catalogId` values; no custom voxels).
 
-**Body:**
-
-| Field | Required | Notes |
-|-------|----------|-------|
-| `sceneState` | yes | `LandscapeSceneState` — background, instances, viewer, sun |
-| `prompt` or `messages` | one required | For follow-ups, send full `messages` including the new user turn (the UI appends the latest instruction before each request) |
-| `model` | no | Registry id (e.g. `gemini-3.5-flash-minimal`, `openai--gpt-oss-120b-off`); must support **local** function calling |
-| `speedTier` | no | Default `moderate` if `model` omitted |
-| `maxSteps` | no | Default 12 |
-
-**Response:** `CallLlmAgentResult` plus `sceneState` (updated after tool handlers run on the server). Check `registryKey` / `modelsAttempted` if the served model differs from the one selected in the UI.
-
-**Models:** `GET /api/models` lists every registry entry. The game dropdown shows function-calling models only. **Groq Compound** (`groq--compound-off`, `groq--compound-mini-off`) appears as disabled — they use Groq built-in web/code tools, not scene catalog tools (`supportsFunctionCalling: false` in `server/groq/models-base.ts`).
-
-**Verify-before-finish:** the scene system prompt requires reading each tool result, retrying on `error` / `ok: false`, calling `list_placed_instances` to confirm placements/moves, then `submit_final_answer`. See `SCENE_AGENT_SYSTEM_INSTRUCTION` in `server/scene/scene-agent-tools.ts`.
-
-Types: [`shared/scene-agent-types.ts`](../shared/scene-agent-types.ts), catalog: [`shared/scene-catalog.ts`](../shared/scene-catalog.ts).
-
-```bash
-curl -s http://localhost:3001/api/scene-agent \
-  -H "Content-Type: application/json" \
-  -d '{"prompt":"Place a red candle at depth 15m","model":"gemini-3.5-flash-minimal","sceneState":{"backgroundUrl":"/landscapes/default.svg","instances":[],"viewer":{"positionX":0,"headYaw":0,"headPitch":0},"sun":{"azimuth":180,"elevation":45}}}'
-```
+**See [scene-agent.md](./scene-agent.md)** for `LandscapeSceneState`, the full tool table, HTTP body/response, client flow (`GameShell` / `SceneAgentPanel`), and how to extend the catalog.
 
 ---
 

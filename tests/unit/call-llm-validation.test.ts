@@ -176,6 +176,6 @@ describe('resolveCallModel', () => {
   });
 
   it('falls back to default model id when no model or tier', () => {
-    expect(resolveCallModel({})).toBe('gemini-3.5-flash-minimal');
+    expect(resolveCallModel({})).toBe('gemini-3.1-flash-lite-low');
   });
 });

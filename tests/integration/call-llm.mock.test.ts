@@ -286,7 +286,7 @@ describe('callLlm with mocked GenAI client', () => {
     installClient(get, generateContent);
 
     const result = await callLlm({
-      model: 'gemini-3.1-flash-lite-minimal',
+      model: 'gemini-3.1-flash-lite-low',
       prompt: 'JSON',
       capabilities: { structuredJson: true },
       structuredOutput: { responseJsonSchema: { type: 'object' } },

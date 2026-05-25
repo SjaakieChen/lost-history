@@ -176,14 +176,18 @@ When `model` is omitted, `callLlm`:
 
 Failover order is **not** sorted by `calibration/speed-benchmark.json` p50. `buildSpeedTierModelOrder` uses `compareRegistryStrength`:
 
-1. **Gemini** (when present in tier): `gemini-3.5-flash` → `gemini-3.1-flash-lite` → `gemini-3.1-pro`
+1. **Gemini** (when present in tier): `gemini-3.1-flash-lite-low` is the global top pick when registered; then `gemini-3.5-flash` → other `gemini-3.1-flash-lite` probes → `gemini-3.1-pro`
 2. **OpenAI Groq** (`openai--gpt-oss-20b`, then `openai--gpt-oss-120b`)
 3. **Compound** (`groq--compound-mini` in `instant`, `groq--compound` in `fast`)
-4. Other Groq models in catalog list order
+4. Other Groq models (llama, allam, …)
+5. **Llama 4 Scout** (`meta-llama--llama-4-scout-17b-16e-instruct`) — last in `instant`
+6. **Qwen** (`qwen--qwen3-32b`) — last in `fast`
 
-**Tier overrides** (always win over thinking heuristics): `openai--gpt-oss-120b` → `moderate` (ranked above `gemini-3.1-flash-lite-*` in that tier); `groq--compound` → `fast`; `groq--compound-mini` → `instant`.
+**Gemini 3.1 Flash Lite** uses probes `low` / `medium` / `high` only (no `minimal`). Tier mapping: `low` → `instant`, `medium` → `fast`, `high` → `moderate`. Base id `gemini-3.1-flash-lite` aliases to the `low` registry row.
 
-Gemini 2.5 models are not in the catalog. Default app model: `gemini-3.5-flash-minimal` (or `GEMINI_DEFAULT_MODEL`).
+**Tier overrides** (probe or base slug; win over thinking heuristics): lite probe keys above; `openai--gpt-oss-120b` → `moderate` (above `gemini-3.1-flash-lite-high`); `meta-llama--llama-4-scout-17b-16e-instruct` → `instant` (tail); `qwen--qwen3-32b` → `fast` (tail); `groq--compound` → `fast`; `groq--compound-mini` → `instant`; plus Groq base slugs aligned with `inferGroqSpeedTier` in `server/groq/models-base.ts`.
+
+Gemini 2.5 models are not in the catalog. Default app model: `gemini-3.1-flash-lite-low` (or `GEMINI_DEFAULT_MODEL` → resolves via alias).
 
 When `model` **is** set (preference, not a hard lock):
 

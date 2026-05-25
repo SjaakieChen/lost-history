@@ -1,3 +1,4 @@
+import type { CatalogModelDefinition } from '../../shared/gemini-types.js';
 import type { LlmProvider, ThinkingModeKind, ThinkingPower } from '../../shared/gemini-types.js';
 import { listTextModels } from './models-base.js';
 
@@ -22,6 +23,7 @@ export interface SpeedProbe {
 }
 
 const LEVELS_PROBES: ThinkingPower[] = ['minimal', 'low', 'medium', 'high'];
+const LITE_LEVELS_PROBES: ThinkingPower[] = ['low', 'medium', 'high'];
 const BUDGET_FLASH_PROBES: ThinkingPower[] = ['off', 'low', 'medium', 'high'];
 const BUDGET_PRO_PROBES: ThinkingPower[] = ['medium', 'high'];
 const NONE_PROBES: ThinkingPower[] = ['off'];
@@ -39,6 +41,17 @@ function probesForMode(thinkingMode: ThinkingModeKind, isPro: boolean): Thinking
   return NONE_PROBES;
 }
 
+function probesForBase(base: CatalogModelDefinition): ThinkingPower[] {
+  if (base.id === 'gemini-3.1-flash-lite') {
+    return LITE_LEVELS_PROBES;
+  }
+  const provider = base.provider ?? 'gemini';
+  if (provider === 'groq') {
+    return ['off'];
+  }
+  return probesForMode(base.thinkingMode, /pro/i.test(base.id));
+}
+
 function probeKey(baseId: string, bakedThinkingPower: ThinkingPower): string {
   return `${baseId}-${bakedThinkingPower}`;
 }
@@ -50,15 +63,33 @@ function thinkingLabel(power: ThinkingPower): string {
   return `${power} thinking`;
 }
 
+function probeAliases(
+  base: CatalogModelDefinition,
+  bakedThinkingPower: ThinkingPower,
+  provider: LlmProvider,
+): string[] | undefined {
+  if (bakedThinkingPower === 'low' && base.id === 'gemini-3.1-flash-lite') {
+    return [base.id, base.apiModelId, ...(base.aliases ?? [])];
+  }
+  if (bakedThinkingPower === 'medium' && base.id !== 'gemini-3.1-flash-lite') {
+    return [base.id, base.apiModelId, ...(base.aliases ?? [])];
+  }
+  if (
+    bakedThinkingPower === 'off' &&
+    (base.thinkingMode === 'none' || provider === 'groq')
+  ) {
+    return [base.id, base.apiModelId, ...(base.aliases ?? [])];
+  }
+  return undefined;
+}
+
 /** Full model × thinking matrix for calibration (not speed-tier assigned). */
 export function buildProbeMatrix(): SpeedProbe[] {
   const probes: SpeedProbe[] = [];
 
   for (const base of listTextModels()) {
     const provider = base.provider ?? 'gemini';
-    const isPro = /pro/i.test(base.id);
-    const thinkingPresets =
-      provider === 'groq' ? (['off'] as ThinkingPower[]) : probesForMode(base.thinkingMode, isPro);
+    const thinkingPresets = probesForBase(base);
 
     for (const bakedThinkingPower of thinkingPresets) {
       probes.push({
@@ -77,13 +108,7 @@ export function buildProbeMatrix(): SpeedProbe[] {
         supportsStrictJson: base.supportsStrictJson,
         freeTierAvailable: base.freeTierAvailable,
         rateLimitHints: base.rateLimitHints,
-        aliases:
-          bakedThinkingPower === 'medium'
-            ? [base.id, base.apiModelId, ...(base.aliases ?? [])]
-            : bakedThinkingPower === 'off' &&
-                (base.thinkingMode === 'none' || provider === 'groq')
-              ? [base.id, base.apiModelId, ...(base.aliases ?? [])]
-              : undefined,
+        aliases: probeAliases(base, bakedThinkingPower, provider),
       });
     }
   }

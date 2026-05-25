@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export const GEMINI_DEFAULT_MODEL =
-  process.env.GEMINI_DEFAULT_MODEL?.trim() || 'gemini-3.5-flash';
+  process.env.GEMINI_DEFAULT_MODEL?.trim() || 'gemini-3.1-flash-lite';
 
 export function getApiKey(): string | undefined {
   return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;

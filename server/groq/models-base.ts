@@ -59,15 +59,7 @@ const GROQ_BASE_MODELS: CatalogModelDefinition[] = [
     supportsStrictJson: false,
     freeTierAvailable: true,
   }),
-  defineGroqCatalogModel('meta-llama/llama-prompt-guard-2-22m', 'Llama Prompt Guard 2 22M', {
-    supportsFunctionCalling: false,
-    supportsWebSearch: false,
-    supportsCodeExecution: false,
-    supportsStructuredOutput: false,
-    supportsStrictJson: false,
-    freeTierAvailable: true,
-  }),
-  defineGroqCatalogModel('meta-llama/llama-prompt-guard-2-86m', 'Llama Prompt Guard 2 86M', {
+  defineGroqCatalogModel('allam-2-7b', 'Allam 2 7B', {
     supportsFunctionCalling: false,
     supportsWebSearch: false,
     supportsCodeExecution: false,
@@ -80,14 +72,6 @@ const GROQ_BASE_MODELS: CatalogModelDefinition[] = [
     supportsWebSearch: false,
     supportsCodeExecution: false,
     supportsStructuredOutput: true,
-    supportsStrictJson: false,
-    freeTierAvailable: true,
-  }),
-  defineGroqCatalogModel('allam-2-7b', 'Allam 2 7B', {
-    supportsFunctionCalling: false,
-    supportsWebSearch: false,
-    supportsCodeExecution: false,
-    supportsStructuredOutput: false,
     supportsStrictJson: false,
     freeTierAvailable: true,
   }),
@@ -111,14 +95,17 @@ export function inferGroqSpeedTier(modelId: string): 'instant' | 'fast' | 'moder
   if (/120b/i.test(modelId)) {
     return 'moderate';
   }
-  if (/instant|8b|22m/i.test(modelId)) {
+  if (/instant|8b/i.test(modelId)) {
     return 'instant';
   }
-  if (/prompt-guard/i.test(modelId)) {
+  if (/70b/i.test(modelId)) {
+    return 'moderate';
+  }
+  if (/qwen/i.test(modelId)) {
     return 'fast';
   }
-  if (/70b|32b/i.test(modelId)) {
-    return 'moderate';
+  if (/scout/i.test(modelId)) {
+    return 'instant';
   }
   return 'moderate';
 }

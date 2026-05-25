@@ -30,9 +30,10 @@ describe('Groq models registry', () => {
     expect(compound.info.supportsFunctionCalling).toBe(false);
   });
 
-  it('does not register removed safeguard or orpheus models', () => {
+  it('does not register removed safeguard, prompt-guard, or orpheus models', () => {
     const ids = listGroqTextModels().map((m) => m.apiModelId);
     expect(ids.some((id) => id.includes('safeguard'))).toBe(false);
+    expect(ids.some((id) => id.includes('prompt-guard'))).toBe(false);
     expect(ids.some((id) => id.includes('orpheus'))).toBe(false);
   });
 
@@ -44,8 +45,12 @@ describe('Groq models registry', () => {
     expect(compound.info.speedTier).toBe('fast');
   });
 
-  it('assigns compound-mini to instant and gpt-oss-120b to moderate', () => {
+  it('assigns compound-mini and scout to instant, qwen to fast, 120b to moderate', () => {
     expect(resolveTextModel('groq--compound-mini-off').info.speedTier).toBe('instant');
+    expect(resolveTextModel('meta-llama--llama-4-scout-17b-16e-instruct-off').info.speedTier).toBe(
+      'instant',
+    );
+    expect(resolveTextModel('qwen--qwen3-32b-off').info.speedTier).toBe('fast');
     expect(resolveTextModel('openai--gpt-oss-120b-off').info.speedTier).toBe('moderate');
   });
 

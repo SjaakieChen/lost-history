@@ -12,16 +12,16 @@ import {
 function agentResult(overrides: Partial<CallLlmAgentResult>): CallLlmAgentResult {
   return {
     text: 'OK',
-    model: 'gemini-3.1-flash-lite-minimal',
-    registryKey: 'gemini-3.1-flash-lite-minimal',
+    model: 'gemini-3.1-flash-lite-low',
+    registryKey: 'gemini-3.1-flash-lite-low',
     terminationReason: 'final_tool',
     stepCount: 3,
     steps: [
-      { step: 1, model: 'gemini-3.1-flash-lite-minimal', durationMs: 100 },
-      { step: 2, model: 'gemini-3.1-flash-lite-minimal', durationMs: 200 },
-      { step: 3, model: 'gemini-3.1-flash-lite-minimal', durationMs: 150 },
+      { step: 1, model: 'gemini-3.1-flash-lite-low', durationMs: 100 },
+      { step: 2, model: 'gemini-3.1-flash-lite-low', durationMs: 200 },
+      { step: 3, model: 'gemini-3.1-flash-lite-low', durationMs: 150 },
     ],
-    modelsAttempted: ['gemini-3.1-flash-lite-minimal'],
+    modelsAttempted: ['gemini-3.1-flash-lite-low'],
     modelSelectedBy: 'explicit',
     ...overrides,
   } as CallLlmAgentResult;
@@ -35,15 +35,15 @@ describe('multiturn-benchmark', () => {
           steps: [
             {
               step: 1,
-              model: 'gemini-3.1-flash-lite-minimal',
+              model: 'gemini-3.1-flash-lite-low',
               toolResults: [{ name: 'fetch_piece', response: {} }],
             },
             {
               step: 2,
-              model: 'gemini-3.1-flash-lite-minimal',
+              model: 'gemini-3.1-flash-lite-low',
               toolResults: [{ name: 'combine_pieces', response: {} }],
             },
-            { step: 3, model: 'gemini-3.1-flash-lite-minimal' },
+            { step: 3, model: 'gemini-3.1-flash-lite-low' },
           ],
         }),
       ),
@@ -53,7 +53,7 @@ describe('multiturn-benchmark', () => {
         agentResult({
           stepCount: 1,
           terminationReason: 'final_tool',
-          steps: [{ step: 1, model: 'gemini-3.1-flash-lite-minimal' }],
+          steps: [{ step: 1, model: 'gemini-3.1-flash-lite-low' }],
         }),
       ),
     ).toBe(false);
@@ -87,17 +87,17 @@ describe('multiturn-benchmark', () => {
         steps: [
           {
             step: 1,
-            model: 'gemini-3.1-flash-lite-minimal',
+            model: 'gemini-3.1-flash-lite-low',
             durationMs: 100,
             toolResults: [{ name: 'fetch_piece', response: {} }],
           },
           {
             step: 2,
-            model: 'gemini-3.1-flash-lite-minimal',
+            model: 'gemini-3.1-flash-lite-low',
             durationMs: 200,
             toolResults: [{ name: 'combine_pieces', response: {} }],
           },
-          { step: 3, model: 'gemini-3.1-flash-lite-minimal', durationMs: 150 },
+          { step: 3, model: 'gemini-3.1-flash-lite-low', durationMs: 150 },
         ],
       }),
       500,
@@ -138,7 +138,7 @@ describe('multiturn-benchmark', () => {
       runsPerProbe: 1,
       probes: [
         {
-          probeKey: 'gemini-3.1-flash-lite-minimal',
+          probeKey: 'gemini-3.1-flash-lite-low',
           apiModelId: 'gemini-3.1-flash-lite',
           bakedThinkingPower: 'minimal',
           thinkingMode: 'levels',

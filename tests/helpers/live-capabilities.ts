@@ -3,7 +3,7 @@ import type { LlmFunctionDeclaration, LlmStructuredOutput } from '../../shared/g
 /** Pinned models for capability live smoke tests (registry ids). */
 export const LIVE_GEMINI_WEB_SEARCH_MODEL = 'gemini-3.5-flash-medium';
 export const LIVE_GEMINI_TOOLS_MODEL = 'gemini-3.5-flash-medium';
-export const LIVE_GEMINI_STRUCTURED_MODEL = 'gemini-3.1-flash-lite-minimal';
+export const LIVE_GEMINI_STRUCTURED_MODEL = 'gemini-3.1-flash-lite-low';
 export const LIVE_GROQ_WEB_SEARCH_MODEL = 'groq--compound-mini-off';
 export const LIVE_GROQ_CODE_EXECUTION_MODEL = 'groq--compound-off';
 export const LIVE_GROQ_CODE_EXECUTION_OSS_MODEL = 'openai--gpt-oss-20b-off';

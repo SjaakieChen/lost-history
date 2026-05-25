@@ -343,10 +343,10 @@ describe('callLlm failover tier batches', () => {
         { speedTier: 'instant' },
         {},
         'instant',
-        'gemini-3.1-flash-lite-minimal',
+        'gemini-3.1-flash-lite-low',
       ),
     ];
     const keys = batches.flatMap((batch) => batch.candidates.map((c) => c.registryKey));
-    expect(keys).not.toContain('gemini-3.1-flash-lite-minimal');
+    expect(keys).not.toContain('gemini-3.1-flash-lite-low');
   });
 });

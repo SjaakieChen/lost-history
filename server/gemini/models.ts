@@ -332,10 +332,10 @@ export function getDefaultModelId(): string {
   if (fromEnv) {
     return fromEnv;
   }
-  if (TEXT_MODEL_REGISTRY['gemini-3.5-flash-minimal']) {
-    return 'gemini-3.5-flash-minimal';
+  if (TEXT_MODEL_REGISTRY['gemini-3.1-flash-lite-low']) {
+    return 'gemini-3.1-flash-lite-low';
   }
-  return SPEED_TIER_MODEL_ORDER.instant[0] ?? 'gemini-3.5-flash-minimal';
+  return SPEED_TIER_MODEL_ORDER.instant[0] ?? 'gemini-3.1-flash-lite-low';
 }
 
 export function getDefaultSpeedTier(): SpeedTier {

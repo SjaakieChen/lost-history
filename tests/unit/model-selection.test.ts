@@ -76,7 +76,7 @@ describe('iterateModelCandidates', () => {
       ),
     ].map((c) => c.registryKey);
 
-    expect(ids).toContain('gemini-3.1-flash-lite-minimal');
+    expect(ids).toContain('gemini-3.1-flash-lite-low');
     expect(
       ids.every(
         (id) =>
