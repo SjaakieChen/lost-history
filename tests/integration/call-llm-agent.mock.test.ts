@@ -54,7 +54,7 @@ describe('callLlmAgent with mocked GenAI client', () => {
     installClient(get, generateContent);
 
     const result = await callLlmAgent({
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-3.5-flash',
       prompt: 'When did Rome fall?',
       tools: [getYearTool],
       toolHandlers: {
@@ -80,7 +80,7 @@ describe('callLlmAgent with mocked GenAI client', () => {
     installClient(get, generateContent);
 
     const result = await callLlmAgent({
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-3.5-flash',
       prompt: 'When did Rome fall?',
       tools: [getYearTool],
       toolHandlers: {
@@ -104,7 +104,7 @@ describe('callLlmAgent with mocked GenAI client', () => {
     installClient(get, generateContent);
 
     const result = await callLlmAgent({
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-3.5-flash',
       prompt: 'Try a tool',
       tools: [getYearTool],
       toolHandlers: {
@@ -136,7 +136,7 @@ describe('callLlmAgent with mocked GenAI client', () => {
     }));
 
     const result = await callLlmAgent({
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-3.5-flash',
       prompt: 'Get both years',
       tools: [getYearTool],
       toolHandlers: { get_year: handler },
@@ -156,7 +156,7 @@ describe('callLlmAgent with mocked GenAI client', () => {
 
     await expect(
       callLlmAgent({
-        model: 'gemini-2.5-flash-lite',
+        model: 'gemini-3.5-flash',
         prompt: 'Loop forever',
         tools: [getYearTool],
         toolHandlers: { get_year: async () => ({ year: 1 }) },
@@ -180,14 +180,14 @@ describe('callLlmAgent with mocked GenAI client', () => {
     installClient(get, generateContent);
 
     await callLlmAgent({
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-3.5-flash',
       prompt: 'Pin model',
       tools: [getYearTool],
       toolHandlers: { get_year: async () => ({ year: 1 }) },
     });
 
     const models = generateContent.mock.calls.map((call) => call[0].model);
-    expect(models).toEqual(['gemini-2.5-flash-lite', 'gemini-2.5-flash-lite']);
+    expect(models).toEqual(['gemini-3.5-flash', 'gemini-3.5-flash']);
   });
 
   it('accumulates thoughts across steps', async () => {
@@ -201,7 +201,7 @@ describe('callLlmAgent with mocked GenAI client', () => {
     installClient(get, generateContent);
 
     const result = await callLlmAgent({
-      model: 'gemini-2.5-flash-lite-low',
+      model: 'gemini-3.1-flash-lite-low',
       prompt: 'Think then answer',
       tools: [getYearTool],
       toolHandlers: { get_year: async () => ({ year: 1 }) },

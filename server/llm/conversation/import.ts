@@ -1,4 +1,11 @@
 import type { ChatMessage } from '../../../shared/gemini-types.js';
+import {
+  formatCodeExecutionSummaryLine,
+  formatWebSearchSummaryLine,
+  parseCodeExecutionBlocks,
+  parseWebSearchBlocks,
+  stripSpecialistBlocks,
+} from './specialist-tags.js';
 import { formatToolResultLine, parseToolCallBlocks, stripToolCallBlocks } from './tool-tags.js';
 
 export interface NormalizeImportedMessagesOptions {
@@ -43,15 +50,69 @@ export function normalizeImportedMessages(
 
     if (message.role === 'assistant') {
       const calls = parseToolCallBlocks(message.content);
-      const visible = stripToolCallBlocks(message.content);
-      if (visible) {
-        normalized.push({ role: 'assistant', content: visible });
+      const webSearches = parseWebSearchBlocks(message.content);
+      const codeRuns = parseCodeExecutionBlocks(message.content);
+      const visible = stripToolCallBlocks(stripSpecialistBlocks(message.content));
+
+      if (preserveToolRole) {
+        if (visible || message.thoughts) {
+          normalized.push({
+            role: 'assistant',
+            content: visible || message.content,
+            thoughts: message.thoughts,
+            model: message.model,
+          });
+        }
+      } else {
+        if (visible) {
+          normalized.push({
+            role: 'assistant',
+            content: visible,
+            thoughts: message.thoughts,
+            model: message.model,
+          });
+        }
+        for (const search of webSearches) {
+          normalized.push({
+            role: 'user',
+            content: formatWebSearchSummaryLine(search),
+          });
+        }
+        for (const code of codeRuns) {
+          normalized.push({
+            role: 'user',
+            content: formatCodeExecutionSummaryLine(code),
+          });
+        }
       }
+
+      if (preserveToolRole) {
+        if (webSearches.length > 0) {
+          for (const search of webSearches) {
+            normalized.push({
+              role: 'assistant',
+              content: `<web_search>\n${JSON.stringify(search)}\n</web_search>`,
+              model: message.model,
+            });
+          }
+        }
+        if (codeRuns.length > 0) {
+          for (const code of codeRuns) {
+            normalized.push({
+              role: 'assistant',
+              content: `<code_execution>\n${JSON.stringify(code)}\n</code_execution>`,
+              model: message.model,
+            });
+          }
+        }
+      }
+
       if (calls.length > 0 && preserveToolRole) {
         for (const call of calls) {
           normalized.push({
             role: 'assistant',
             content: `<tool_call name="${call.name}">\n${JSON.stringify(call.args)}\n</tool_call>`,
+            model: message.model,
           });
         }
       } else if (calls.length > 0) {
@@ -61,8 +122,19 @@ export function normalizeImportedMessages(
             content: `[Tool call ${call.name}]: ${JSON.stringify(call.args)}`,
           });
         }
-      } else if (!visible) {
-        normalized.push({ role: 'assistant', content: message.content });
+      } else if (!preserveToolRole && !visible && webSearches.length === 0 && codeRuns.length === 0) {
+        normalized.push({
+          role: 'assistant',
+          content: message.content,
+          thoughts: message.thoughts,
+          model: message.model,
+        });
+      } else if (preserveToolRole && !visible && !message.thoughts && calls.length === 0 && webSearches.length === 0 && codeRuns.length === 0) {
+        normalized.push({
+          role: 'assistant',
+          content: message.content,
+          model: message.model,
+        });
       }
       continue;
     }

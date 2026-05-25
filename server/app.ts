@@ -6,6 +6,7 @@ import {
   listTextModels,
   GeminiQuotaError,
   LlmCapabilityError,
+  CallLlmValidationError,
   AgentMaxStepsError,
 } from './gemini.js';
 import type { CallLlmOptions, ChatMessage, SpeedTier } from '../shared/gemini-types.js';
@@ -41,11 +42,12 @@ export function createApp() {
         result as typeof result & { threadState?: unknown };
       res.json(publicResult);
     } catch (error) {
-      if (error instanceof LlmCapabilityError) {
+      if (error instanceof CallLlmValidationError || error instanceof LlmCapabilityError) {
         res.status(400).json({
           error: error.message,
-          model: error.model,
-          capability: error.capability,
+          ...(error instanceof LlmCapabilityError
+            ? { model: error.model, capability: error.capability }
+            : {}),
         });
         return;
       }
@@ -81,6 +83,7 @@ export function createApp() {
         speedTier?: SpeedTier;
         sceneState: LandscapeSceneState;
         maxSteps?: number;
+        debug?: boolean;
       };
 
       if (!body.sceneState) {
@@ -100,15 +103,17 @@ export function createApp() {
         speedTier: body.speedTier,
         sceneState: body.sceneState,
         maxSteps: body.maxSteps,
+        debug: body.debug,
       });
 
       res.json(result);
     } catch (error) {
-      if (error instanceof LlmCapabilityError) {
+      if (error instanceof CallLlmValidationError || error instanceof LlmCapabilityError) {
         res.status(400).json({
           error: error.message,
-          model: error.model,
-          capability: error.capability,
+          ...(error instanceof LlmCapabilityError
+            ? { model: error.model, capability: error.capability }
+            : {}),
         });
         return;
       }

@@ -8,10 +8,16 @@ export {
   resolveModelForSpeedTier,
   GeminiQuotaError,
   LlmCapabilityError,
+  CallLlmValidationError,
   AgentMaxStepsError,
 } from './gemini/index.js';
 
-export { LlmSession } from './llm/session.js';
+export {
+  LlmSession,
+  snapshotCallContext,
+  type LiveFixtureCallContext,
+  type SessionTurnRecord,
+} from './llm/session.js';
 
 export type {
   CallLlmOptions,

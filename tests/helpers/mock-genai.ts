@@ -7,7 +7,7 @@ export function createTextResponse(
 ): GenerateContentResponse {
   return {
     text,
-    modelVersion: 'models/gemini-2.5-flash-lite',
+    modelVersion: 'models/gemini-3.5-flash',
     candidates: [
       {
         finishReason: 'STOP',
@@ -29,7 +29,7 @@ export function createTextResponse(
 export function createThoughtResponse(thought: string, text: string): GenerateContentResponse {
   return {
     text,
-    modelVersion: 'models/gemini-2.5-flash-lite',
+    modelVersion: 'models/gemini-3.5-flash',
     candidates: [
       {
         finishReason: 'STOP',
@@ -49,7 +49,7 @@ export function createFunctionCallsResponse(
   calls: Array<{ name: string; args?: Record<string, unknown>; id?: string }>,
 ): GenerateContentResponse {
   return {
-    modelVersion: 'models/gemini-2.5-flash-lite',
+    modelVersion: 'models/gemini-3.5-flash',
     candidates: [
       {
         finishReason: 'STOP',

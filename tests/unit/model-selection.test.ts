@@ -50,9 +50,9 @@ describe('iterateModelCandidates', () => {
   });
 
   it('yields explicit model only once', () => {
-    const candidates = [...iterateModelCandidates({ model: 'gemini-2.5-flash' })];
+    const candidates = [...iterateModelCandidates({ model: 'gemini-3.5-flash' })];
     expect(candidates).toHaveLength(1);
-    expect(candidates[0].registryKey).toBe('gemini-2.5-flash-medium');
+    expect(candidates[0].registryKey).toBe('gemini-3.5-flash-medium');
   });
 
   it('skips exhausted models', () => {

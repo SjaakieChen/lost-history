@@ -1,8 +1,15 @@
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions.js';
 import type OpenAI from 'openai';
 import type { LlmFunctionCall } from '../../../shared/gemini-types.js';
+import { asGroqMessage, type GroqChatCompletionMessage } from '../../groq/groq-message.js';
 import { formatToolResultLine } from './tool-tags.js';
 import type { GroqThreadState } from './types.js';
+
+/** Groq assistant message param including reasoning and executed_tools. */
+export type GroqAssistantMessageParam = ChatCompletionMessageParam & {
+  reasoning?: string | null;
+  executed_tools?: unknown;
+};
 
 export function createGroqThread(messages: ChatCompletionMessageParam[] = []): GroqThreadState {
   return { provider: 'groq', messages: [...messages] };
@@ -20,11 +27,19 @@ export function appendGroqAssistantMessage(
   state: GroqThreadState,
   message: OpenAI.Chat.Completions.ChatCompletionMessage,
 ): void {
-  state.messages.push({
+  const groq = asGroqMessage(message);
+  const entry: GroqAssistantMessageParam = {
     role: 'assistant',
     content: message.content ?? null,
     tool_calls: message.tool_calls,
-  });
+  };
+  if (groq?.reasoning) {
+    entry.reasoning = groq.reasoning;
+  }
+  if (groq?.executed_tools?.length) {
+    entry.executed_tools = groq.executed_tools;
+  }
+  state.messages.push(entry);
 }
 
 export function appendGroqToolResult(

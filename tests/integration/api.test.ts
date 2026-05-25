@@ -25,7 +25,7 @@ describe('HTTP API', () => {
         id: 'gemini-3.1-flash-lite-minimal',
         strengthRank: expect.any(Number),
         supportsFunctionCalling: true,
-        supportsWebSearch: false,
+        supportsWebSearch: true,
         supportsCodeExecution: false,
         supportsStructuredOutput: true,
         supportsStrictJson: true,
@@ -69,33 +69,34 @@ describe('HTTP API', () => {
 
       const response = await request(app)
         .post('/api/llm')
-        .send({ model: 'gemini-2.5-flash-lite' })
+        .send({ model: 'gemini-3.5-flash' })
         .expect(400);
 
       expect(response.body.error).toBe('prompt or messages are required.');
       expect(spy).not.toHaveBeenCalled();
     });
 
-    it('returns 400 with capability details for structuredOutput on unsupported model', async () => {
+    it('returns 400 with capability details for structuredJson on unsupported model', async () => {
       const response = await request(app)
         .post('/api/llm')
         .send({
           prompt: 'Hi',
-          model: 'gemini-2.5-flash-lite',
+          model: 'allam-2-7b-off',
+          capabilities: { structuredJson: true },
           structuredOutput: { responseSchema: { type: 'object' } },
         })
         .expect(400);
 
       expect(response.body).toEqual({
-        error: 'Model "gemini-2.5-flash-lite-medium" does not support structuredOutput.',
-        model: 'gemini-2.5-flash-lite-medium',
+        error: 'Model "allam-2-7b-off" does not support structuredOutput.',
+        model: 'allam-2-7b-off',
         capability: 'structuredOutput',
       });
     });
 
     it('returns 429 when all models are exhausted', async () => {
       vi.spyOn(callLlmModule, 'callLlm').mockRejectedValue(
-        new GeminiQuotaError('All models exhausted', 'gemini-2.5-flash-medium'),
+        new GeminiQuotaError('All models exhausted', 'gemini-3.5-flash-medium'),
       );
 
       const response = await request(app)
@@ -104,7 +105,7 @@ describe('HTTP API', () => {
         .expect(429);
 
       expect(response.body.error).toContain('All models exhausted');
-      expect(response.body.model).toBe('gemini-2.5-flash-medium');
+      expect(response.body.model).toBe('gemini-3.5-flash-medium');
     });
   });
 });

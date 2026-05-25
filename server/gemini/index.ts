@@ -1,5 +1,6 @@
 export {
   callLlm,
+  CallLlmValidationError,
   LlmCapabilityError,
   resolveCallModel,
 } from './call-llm.js';

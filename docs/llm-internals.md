@@ -113,9 +113,15 @@ Termination: `'final_tool' | 'natural' | 'max_steps'`.
 
 ## Transcript format (`export` / `import`)
 
-Portable `ChatMessage[]` for cross-model chaining.
+Portable `ChatMessage[]` is the **unified history** for `LlmSession`, `callLlmAgent`, HTTP `messages`, and cross-model chaining. Built by `buildTranscriptTurnFromResult` in `server/llm/conversation/transcript.ts` after each `callLlm` success.
 
-**Assistant tool step** (when `includeToolSummary: true`):
+| Field on `ChatMessage` | Content |
+|------------------------|---------|
+| `content` | Visible answer + embedded specialist tags |
+| `thoughts` | Optional internal reasoning (assistant only) |
+| `model` | Registry key for that turn |
+
+**Caller tools** (when `includeToolSummary: true`):
 
 ```text
 Optional visible text
@@ -125,17 +131,33 @@ Optional visible text
 </tool_call>
 ```
 
+**Built-in web search** (from Gemini `groundingMetadata` or Groq `executed_tools[].search_results`):
+
+```text
+<web_search>
+{"queries":["..."], "sources":[{"title":"...","url":"..."}]}
+</web_search>
+```
+
+**Built-in code execution** (from Groq `executed_tools`):
+
+```text
+<code_execution>
+{"code":"...", "output":"...", "type":"python"}
+</code_execution>
+```
+
 **Tool result:**
 
 ```json
-{ "role": "tool", "toolName": "get_year", "content": "{\"year\":476}", "model": "gemini-2.5-flash-lite-medium" }
+{ "role": "tool", "toolName": "get_year", "content": "{\"year\":476}", "model": "gemini-3.5-flash-medium" }
 ```
 
-Optional `model` on `assistant` / `tool` lines records which registry key produced that turn (`AgentStep.model` / `CallLlmResult.registryKey`).
+`CallLlmResult.executedTools` mirrors parsed provider artifacts before tags are embedded. Groq same-provider threads also keep native `reasoning` and `executed_tools` on assistant messages (`groq-thread.ts`).
 
-`formatToolCallBlock` / `parseToolCallBlocks` in `server/llm/conversation/tool-tags.ts`.
+`formatToolCallBlock` / `parseToolCallBlocks` in `server/llm/conversation/tool-tags.ts`. Specialist tags in `server/llm/conversation/specialist-tags.ts`.
 
-`exportMessages({ includeToolSummary: false })` strips `<tool_call>` blocks and `tool` role lines, keeping visible assistant text only.
+`exportMessages({ includeToolSummary: false })` strips specialist and `<tool_call>` blocks, keeping visible assistant text only.
 
 ---
 
@@ -146,9 +168,22 @@ Optional `model` on `assistant` / `tool` lines records which registry key produc
 When `model` is omitted, `callLlm`:
 
 1. Resolves `speedTier` from options or `getDefaultSpeedTier()` (from `GEMINI_DEFAULT_MODEL` registry entry).
-2. Iterates tier batches via `iterateSpeedTierBatches` — strongest free-tier model first (`SPEED_TIER_MODEL_ORDER` in `models.ts`).
+2. Iterates tier batches via `iterateSpeedTierBatches` — strongest free-tier model first (`SPEED_TIER_MODEL_ORDER` in `models.ts`, built by `compareRegistryStrength` in `server/gemini/model-ranking.ts`).
 3. **Ping** reachable models in the current tier (`pingAllModels`); skip exhausted entries (`availability.ts`).
 4. On recoverable failure: mark quota exhaustion when applicable, try next model, then downgrade tier (`getSpeedTierDowngradeChain`).
+
+### Strength order (product policy)
+
+Failover order is **not** sorted by `calibration/speed-benchmark.json` p50. `buildSpeedTierModelOrder` uses `compareRegistryStrength`:
+
+1. **Gemini** (when present in tier): `gemini-3.5-flash` → `gemini-3.1-flash-lite` → `gemini-3.1-pro`
+2. **OpenAI Groq** (`openai--gpt-oss-20b`, then `openai--gpt-oss-120b`)
+3. **Compound** (`groq--compound-mini` in `instant`, `groq--compound` in `fast`)
+4. Other Groq models in catalog list order
+
+**Tier overrides** (always win over thinking heuristics): `openai--gpt-oss-120b` → `moderate` (ranked above `gemini-3.1-flash-lite-*` in that tier); `groq--compound` → `fast`; `groq--compound-mini` → `instant`.
+
+Gemini 2.5 models are not in the catalog. Default app model: `gemini-3.5-flash-minimal` (or `GEMINI_DEFAULT_MODEL`).
 
 When `model` **is** set (preference, not a hard lock):
 
@@ -169,10 +204,14 @@ Implemented in `server/gemini/failure-policy.ts`, `call-llm.ts`, `call-llm-agent
 | Policy / safety block | Fail over to another model; **`console.warn`** with registry key (not silent) |
 | Auth errors (401/403), 5xx, overload | Fail over when another candidate exists |
 | `LlmCapabilityError` | Throw immediately (caller must change options) |
-| `tools` required | Failover candidates filtered with `requireFunctionCalling` before tier ordering |
+| `capabilities.*` set | `resolveCallCapabilities` maps to `require*` filters before tier ordering |
+| `capabilities.tools` | `requireFunctionCalling` |
+| `capabilities.webSearch` | `requireWebSearch` |
+| `capabilities.codeExecution` | `requireCodeExecution` |
+| `capabilities.structuredJson` / `strictJson` | `requireStructuredOutput` / `requireStrictJson` |
 | Exhaustion cache | **Request-scoped** per `callLlm`, `callLlmAgent`, or `LlmSession` (`ExhaustionContext`) — not shared across unrelated HTTP requests |
 | Agent invalid output | Retry once on the same locked model, then unlock and allow `callLlm` tier failover |
-| Provider switch | Rebuild `ProviderThreadState` from portable `messages` / `threadRebuildMessages` (text transcript) |
+| Provider switch | Rebuild `ProviderThreadState` from portable `messages` / `threadRebuildMessages` (includes specialist tags + `thoughts`) |
 | All candidates fail | `GeminiQuotaError` with `blockedModels`, `failureKind`, optional `retryAfterMs` |
 
 Per-turn `model` on exported `assistant` / `tool` lines comes from `AgentStep.model` / `CallLlmResult.registryKey`.
@@ -191,7 +230,26 @@ Specialist capability labels (set per catalog row in `shared/gemini-types.ts`):
 | structured JSON | `supportsStructuredOutput` or `supportsStrictJson` | `requireStructuredOutput` |
 | strict JSON | `supportsStrictJson` | `requireStrictJson` |
 
-Groq strict JSON uses `response_format: { type: 'json_schema', json_schema: { strict: true, ... } }` (see `server/groq/generate.ts`).
+Groq strict JSON uses `response_format: { type: 'json_schema', json_schema: { strict: true, ... } }` only when caller `capabilities.strictJson` is true (see `server/groq/generate.ts`). Catalog `supportsStrictJson` means the model *can* use strict mode, not that every structured call uses it.
+
+### Activation vs catalog
+
+- **Catalog** (`supports*` on `TextModelInfo`) — what the model can do.
+- **`capabilities` on the request** — what this call requires for routing (`require*` filters).
+- **Activation** (`resolveCallCapabilities().activation`) — what provider params are sent. Groq `strict: true` only when `activation.strictJson` is true.
+
+Gemini `capabilities.webSearch` adds `{ googleSearch: {} }` to generate `tools` in `buildRequestConfig`. Response `groundingMetadata` is parsed in `server/gemini/grounding.ts` into `executedTools` and `<web_search>` tags.
+
+Groq `capabilities.codeExecution` on Compound needs no extra request tools; on GPT-OSS adds `{ type: 'code_interpreter' }` with `tool_choice: 'required'` when no caller tools (`server/groq/generate.ts`). `message.reasoning` and `message.executed_tools` are parsed in `server/groq/groq-message.ts`.
+
+### Provider artifact surfaces
+
+| Provider | Capability | User answer | Structured artifacts |
+|----------|------------|-------------|----------------------|
+| Gemini | webSearch | `text` parts | `candidates[0].groundingMetadata` |
+| Gemini | tools | `text` + `functionCall` parts | Native content parts |
+| Groq Compound | webSearch / codeExecution | `message.content` | `message.executed_tools`, `message.reasoning` |
+| Groq GPT-OSS | codeExecution | `message.content` | `code_interpreter` tool + `executed_tools` |
 
 ---
 
@@ -216,13 +274,15 @@ Groq strict JSON uses `response_format: { type: 'json_schema', json_schema: { st
 | Aspect | Gemini | Groq |
 |--------|--------|------|
 | API | `generateContent` + `Content[]` | `chat.completions` |
-| Thinking | `buildThinkingConfig` from `bakedThinkingPower` | Not used (`thinkingUsed: false`) |
+| Thinking | `buildThinkingConfig` from `bakedThinkingPower` | Groq `message.reasoning` → `CallLlmResult.thoughts` |
 | Structured output | JSON schema / OpenAPI schema | `json_schema` (`strict: true` on GPT-OSS) or `json_object` fallback |
-| Tools | `functionDeclarations` + `toolConfig` | OpenAI `tools` + `tool_choice` |
+| Tools | `functionDeclarations` + `toolConfig` (caller `capabilities.tools`) | OpenAI `tools` + `tool_choice` |
+| Web search | `googleSearch` tool when `capabilities.webSearch` | Built-in on Compound models |
+| Strict JSON | Schema + JSON mime | `json_schema` with `strict: true` only when `capabilities.strictJson` |
 | Thread growth | Native model `content` parts | Assistant message + tool messages |
 | Env | `GEMINI_API_KEY` | `GROQ_API_KEY` |
 
-Provider mismatch with an existing `threadState` triggers **thread rebuild** from `threadRebuildMessages` / `messages` when failover changes provider mid-run (agent/session). Rebuild is text-only; native tool/thought artifacts from the prior provider are not carried over.
+Provider mismatch with an existing `threadState` triggers **thread rebuild** from `threadRebuildMessages` / `messages` when failover changes provider mid-run (agent/session). Portable tags preserve search/code context; native Groq `executed_tools` on thread messages are used when staying on Groq.
 
 ---
 

@@ -88,6 +88,7 @@ describe('callLlm Groq tool thread', () => {
 
     const options: InternalCallLlmOptions = {
       model: 'llama-3.1-8b-instant',
+      capabilities: { tools: true },
       threadState: thread,
       tools: [
         {

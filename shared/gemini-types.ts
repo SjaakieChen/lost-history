@@ -93,9 +93,29 @@ export interface GetModelsByTierOptions {
 
 export type ChatRole = 'user' | 'assistant' | 'system' | 'tool';
 
+export interface LlmSearchResult {
+  title?: string;
+  url?: string;
+  content?: string;
+  score?: number;
+}
+
+/** Provider built-in tool run (web search, code execution, etc.). */
+export interface LlmExecutedTool {
+  name?: string;
+  type?: string;
+  arguments?: string;
+  output?: string;
+  searchQueries?: string[];
+  searchResults?: LlmSearchResult[];
+  codeResults?: Array<{ text?: string }>;
+}
+
 export interface ChatMessage {
   role: ChatRole;
   content: string;
+  /** Internal reasoning for this turn (assistant only). */
+  thoughts?: string;
   /** Set when `role === 'tool'`. */
   toolName?: string;
   /** Optional correlation id for exported tool rounds. */
@@ -123,8 +143,24 @@ export interface LlmStructuredOutput {
   responseSchema?: Record<string, unknown>;
 }
 
+/** Specialist features beyond speed-tier routing (explicit per call). */
+export type LlmSpecialistCapability =
+  | 'tools'
+  | 'webSearch'
+  | 'codeExecution'
+  | 'structuredJson'
+  | 'strictJson';
+
+/** Set a key to `true` only when that feature is required for this call. */
+export type LlmCallCapabilities = Partial<Record<LlmSpecialistCapability, true>>;
+
 /** Unified LLM call surface. */
 export interface CallLlmOptions {
+  /**
+   * Required specialist features for routing and provider activation.
+   * Omitted keys are not required. Does not infer from `tools` or `structuredOutput` alone.
+   */
+  capabilities?: LlmCallCapabilities;
   /** Explicit registry id or API model id. */
   model?: string;
   /**
@@ -159,7 +195,12 @@ export interface CallLlmResult {
   text: string;
   thoughts?: string;
   functionCalls?: LlmFunctionCall[];
-  /** Portable transcript for cross-model chaining (agent runs). */
+  /** Built-in specialist tool runs (web search, code execution). */
+  executedTools?: LlmExecutedTool[];
+  /**
+   * Portable transcript for this call (user + assistant), including specialist tags.
+   * Also returned from agent runs as the full multi-step export.
+   */
   messages?: ChatMessage[];
   model: string;
   /** Stable registry id for locking / failover (prefer over `model` API id). */
@@ -190,6 +231,11 @@ export interface FinalAnswerToolConfig {
 /** Options for multi-turn agent loop with automatic tool execution. */
 export interface CallLlmAgentOptions extends CallLlmOptions {
   toolHandlers: Record<string, LlmToolHandler>;
+  /**
+   * When true, each step includes `providerRequest` and the result includes `debug`
+   * with the native thread and portable transcript (dev dashboard).
+   */
+  debug?: boolean;
   /** Maximum generate turns before AgentMaxStepsError. Default: 10. */
   maxSteps?: number;
   /** Default: both — prefer submit_final_answer, allow plain-text fallback. */
@@ -215,10 +261,43 @@ export interface AgentStep {
   text?: string;
   thoughts?: string;
   functionCalls?: LlmFunctionCall[];
+  executedTools?: LlmExecutedTool[];
   toolResults?: AgentToolResult[];
   finishReason?: string;
   /** Wall-clock ms for this agent step's LLM call. */
   durationMs?: number;
+  /** Present when the run requested debug snapshots (dev dashboard). */
+  providerRequest?: LlmProviderRequestSnapshot;
+}
+
+/** Native provider payload sent on one LLM step (Gemini contents or Groq chat messages). */
+export interface LlmProviderRequestSnapshot {
+  provider: LlmProvider;
+  registryKey: string;
+  apiModelId: string;
+  /** System instruction passed separately (Gemini) or as a system message (Groq). */
+  systemInstruction?: string;
+  providerMessages: unknown;
+  tools?: LlmFunctionDeclaration[];
+  functionCallingMode?: FunctionCallingMode;
+  maxOutputTokens?: number;
+  thinkingConfig?: unknown;
+  toolsConfig?: unknown;
+  structuredConfig?: unknown;
+}
+
+/** Dev-only bundle: exactly what the model received across the agent run. */
+export interface LlmAgentDebug {
+  /** Caller `systemInstruction` before agent merge rules. */
+  sceneSystemInstruction?: string;
+  /** Full system instruction passed to each provider call. */
+  effectiveSystemInstruction?: string;
+  tools: LlmFunctionDeclaration[];
+  messages: ChatMessage[];
+  steps: AgentStep[];
+  finalProviderThread?: unknown;
+  thoughts?: string;
+  usage?: GenerateTextUsage;
 }
 
 export interface ExportMessagesOptions {
@@ -233,6 +312,7 @@ export interface CallLlmAgentResult extends CallLlmResult {
   terminationReason: AgentTerminationReason;
   steps: AgentStep[];
   stepCount: number;
+  debug?: LlmAgentDebug;
 }
 
 /** Text-only chat helper result (no tools / structured output). */

@@ -18,6 +18,8 @@ export interface RunSceneAgentOptions {
   speedTier?: SpeedTier;
   sceneState: LandscapeSceneState;
   maxSteps?: number;
+  /** Include native provider payloads in the response (dev dashboard). */
+  debug?: boolean;
 }
 
 export interface SceneAgentResult extends CallLlmAgentResult {
@@ -53,6 +55,7 @@ export async function runSceneAgent(options: RunSceneAgentOptions): Promise<Scen
     toolHandlers,
     maxSteps: options.maxSteps ?? 12,
     maxOutputTokens: 1024,
+    debug: options.debug,
   });
 
   return {

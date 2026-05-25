@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import type { AgentStep, ChatMessage, TextModelInfo } from '../../shared/gemini-types.js';
+import type {
+  AgentStep,
+  ChatMessage,
+  LlmAgentDebug,
+  TextModelInfo,
+} from '../../shared/gemini-types.js';
 import type { LandscapeSceneState } from '../../shared/scene-agent-types.js';
+import ModelContextViewer from './ModelContextViewer.js';
 
 export interface SceneAgentResponse {
   text: string;
@@ -11,6 +17,9 @@ export interface SceneAgentResponse {
   registryKey: string;
   model: string;
   messages?: ChatMessage[];
+  debug?: LlmAgentDebug;
+  usage?: LlmAgentDebug['usage'];
+  thoughts?: string;
   modelsAttempted?: string[];
   modelSelectedBy?: string;
   error?: string;
@@ -70,6 +79,8 @@ export default function SceneAgentPanel({
   const [routingNote, setRoutingNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [showToolLog, setShowToolLog] = useState(true);
+  const [modelDebug, setModelDebug] = useState<LlmAgentDebug | null>(null);
+  const [showModelContext, setShowModelContext] = useState(true);
 
   const sceneModels = allModels.filter((m) => m.supportsFunctionCalling);
   const nonSceneModels = allModels.filter((m) => !m.supportsFunctionCalling);
@@ -108,6 +119,7 @@ export default function SceneAgentPanel({
       setRoutingNote('');
       setResponseText('');
       setSteps([]);
+      setModelDebug(null);
 
       const outboundMessages: ChatMessage[] = [...history];
       if (userPrompt.trim()) {
@@ -124,6 +136,7 @@ export default function SceneAgentPanel({
             prompt: undefined,
             sceneState,
             maxSteps: 12,
+            debug: true,
           }),
         });
 
@@ -136,6 +149,7 @@ export default function SceneAgentPanel({
         onSceneStateChange(data.sceneState);
         setResponseText(data.text);
         setSteps(data.steps ?? []);
+        setModelDebug(data.debug ?? null);
         onAgentComplete?.(data);
 
         if (data.registryKey && data.registryKey !== selectedModel) {
@@ -185,6 +199,7 @@ export default function SceneAgentPanel({
     setError('');
     setWarning('');
     setRoutingNote('');
+    setModelDebug(null);
   }
 
   return (
@@ -242,7 +257,9 @@ export default function SceneAgentPanel({
       </form>
 
       {messages.length > 0 && (
-        <p className="scene-agent__meta">{messages.length} message(s) in thread</p>
+        <p className="scene-agent__meta">
+          {messages.length} portable message(s) in thread — full model view below after each run
+        </p>
       )}
 
       {routingNote && <p className="scene-agent__routing">{routingNote}</p>}
@@ -253,6 +270,19 @@ export default function SceneAgentPanel({
         <div className="response">
           <h3>Agent reply</h3>
           <p>{responseText}</p>
+        </div>
+      )}
+
+      {modelDebug && (
+        <div className="scene-agent__model-context">
+          <button
+            type="button"
+            className="scene-agent__tools-toggle"
+            onClick={() => setShowModelContext((v) => !v)}
+          >
+            {showModelContext ? 'Hide' : 'Show'} model context (what the LLM saw)
+          </button>
+          {showModelContext && <ModelContextViewer debug={modelDebug} />}
         </div>
       )}
 

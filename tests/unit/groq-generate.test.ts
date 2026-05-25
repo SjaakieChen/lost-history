@@ -9,10 +9,14 @@ describe('buildGroqResponseFormat', () => {
     additionalProperties: false,
   };
 
-  it('uses strict json_schema when model supports strict JSON and schema is provided', () => {
+  const ossInfo = { supportsStructuredOutput: true, supportsStrictJson: true };
+  const llamaInfo = { supportsStructuredOutput: true, supportsStrictJson: false };
+
+  it('uses strict json_schema only when activation.strictJson is true', () => {
     const format = buildGroqResponseFormat(
       { structuredOutput: { responseJsonSchema: schema } },
-      { supportsStructuredOutput: true, supportsStrictJson: true },
+      ossInfo,
+      { structuredJson: true, strictJson: true },
     );
     expect(format).toEqual({
       type: 'json_schema',
@@ -24,10 +28,11 @@ describe('buildGroqResponseFormat', () => {
     });
   });
 
-  it('uses best-effort json_schema when only structured output is supported', () => {
+  it('does not use strict when model supports strict but activation.strictJson is false', () => {
     const format = buildGroqResponseFormat(
       { structuredOutput: { responseJsonSchema: schema } },
-      { supportsStructuredOutput: true, supportsStrictJson: false },
+      ossInfo,
+      { structuredJson: true, strictJson: false },
     );
     expect(format).toEqual({
       type: 'json_schema',
@@ -39,17 +44,38 @@ describe('buildGroqResponseFormat', () => {
     });
   });
 
+  it('uses best-effort json_schema when only structured output is supported', () => {
+    const format = buildGroqResponseFormat(
+      { structuredOutput: { responseJsonSchema: schema } },
+      llamaInfo,
+      { structuredJson: true, strictJson: false },
+    );
+    expect(format).toEqual({
+      type: 'json_schema',
+      json_schema: {
+        name: 'structured_output',
+        strict: false,
+        schema,
+      },
+    });
+  });
+
+  it('returns undefined when structuredJson activation is off', () => {
+    expect(
+      buildGroqResponseFormat(
+        { structuredOutput: { responseJsonSchema: schema } },
+        ossInfo,
+        { structuredJson: false, strictJson: false },
+      ),
+    ).toBeUndefined();
+  });
+
   it('falls back to json_object when structured output is requested without a schema', () => {
     const format = buildGroqResponseFormat(
       { structuredOutput: {} },
-      { supportsStructuredOutput: true, supportsStrictJson: false },
+      llamaInfo,
+      { structuredJson: true, strictJson: false },
     );
     expect(format).toEqual({ type: 'json_object' });
-  });
-
-  it('returns undefined when structured output is not requested', () => {
-    expect(
-      buildGroqResponseFormat({}, { supportsStructuredOutput: true, supportsStrictJson: true }),
-    ).toBeUndefined();
   });
 });

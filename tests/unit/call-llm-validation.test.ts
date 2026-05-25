@@ -1,9 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetExhaustionState } from '../../server/gemini/availability.js';
-import { callLlm, resolveCallModel, LlmCapabilityError } from '../../server/gemini/call-llm.js';
+import {
+  callLlm,
+  resolveCallModel,
+  CallLlmValidationError,
+  LlmCapabilityError,
+} from '../../server/gemini/call-llm.js';
 import { getGenAIClient } from '../../server/gemini/client.js';
 import { SPEED_TIER_MODEL_ORDER } from '../../server/gemini/models.js';
 import { createTextResponse, quotaError } from '../helpers/mock-genai.js';
+
+vi.mock('../../server/config.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../server/config.js')>();
+  return {
+    ...actual,
+    getGroqApiKey: vi.fn(() => undefined),
+  };
+});
 
 vi.mock('../../server/gemini/rate-limit.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../server/gemini/rate-limit.js')>();
@@ -31,58 +44,71 @@ describe('callLlm validation (before API)', () => {
   });
 
   it('throws when prompt and messages are both missing', async () => {
-    await expect(callLlm({ model: 'gemini-2.5-flash-lite' })).rejects.toThrow(
+    await expect(callLlm({ model: 'gemini-3.5-flash' })).rejects.toThrow(
       'Either prompt or messages is required.',
     );
   });
 
   it('throws when prompt is whitespace only', async () => {
     await expect(
-      callLlm({ model: 'gemini-2.5-flash-lite', prompt: '   ' }),
+      callLlm({ model: 'gemini-3.5-flash', prompt: '   ' }),
     ).rejects.toThrow('Either prompt or messages is required.');
   });
 
   it('throws when messages array is empty', async () => {
     await expect(
-      callLlm({ model: 'gemini-2.5-flash-lite', messages: [] }),
+      callLlm({ model: 'gemini-3.5-flash', messages: [] }),
     ).rejects.toThrow('Either prompt or messages is required.');
   });
 
-  it('throws LlmCapabilityError for structuredOutput on gemini-2.5-flash-lite', async () => {
+  it('throws CallLlmValidationError when tools provided without capabilities.tools', async () => {
+    await expect(
+      callLlm({
+        model: 'gemini-3.5-flash',
+        prompt: 'hello',
+        tools: [{ name: 'fn', description: 'd' }],
+      }),
+    ).rejects.toThrow(CallLlmValidationError);
+  });
+
+  it('throws LlmCapabilityError for structuredJson on allam-2-7b-off', async () => {
     installClient(vi.fn());
 
     await expect(
       callLlm({
-        model: 'gemini-2.5-flash-lite-off',
+        model: 'allam-2-7b-off',
         prompt: 'hello',
+        capabilities: { structuredJson: true },
         structuredOutput: { responseSchema: { type: 'object' } },
       }),
     ).rejects.toThrow(LlmCapabilityError);
   });
 
-  it('throws LlmCapabilityError for structuredOutput on gemini-2.5-flash-lite', async () => {
+  it('throws LlmCapabilityError for strictJson on groq compound', async () => {
     installClient(vi.fn());
 
     await expect(
       callLlm({
-        model: 'gemini-2.5-flash-lite',
+        model: 'groq--compound-off',
         prompt: 'hello',
+        capabilities: { structuredJson: true, strictJson: true },
         structuredOutput: { responseJsonSchema: { type: 'object' } },
       }),
     ).rejects.toMatchObject({
       name: 'LlmCapabilityError',
-      model: 'gemini-2.5-flash-lite-medium',
-      capability: 'structuredOutput',
+      model: 'groq--compound-off',
+      capability: 'strictJson',
     });
   });
 
-  it('passes function-calling capability check for gemini-2.5-flash before API', async () => {
+  it('passes function-calling capability check for gemini-3.5-flash before API', async () => {
     const generateContent = vi.fn().mockResolvedValue(createTextResponse('ok'));
     installClient(generateContent);
 
     await callLlm({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.5-flash',
       prompt: 'hello',
+      capabilities: { tools: true },
       tools: [{ name: 'get_answer', description: 'Returns an answer' }],
     });
 
@@ -90,7 +116,7 @@ describe('callLlm validation (before API)', () => {
   });
 
   it('explicit model failovers on quota (A2)', async () => {
-    const preferredApi = 'gemini-2.5-flash-lite';
+    const preferredApi = 'gemini-3.5-flash';
     const get = vi.fn().mockResolvedValue({});
     const generateContent = vi.fn().mockImplementation(({ model }: { model: string }) => {
       if (model === preferredApi) {
@@ -100,7 +126,7 @@ describe('callLlm validation (before API)', () => {
     });
     installClient(generateContent, get);
 
-    const result = await callLlm({ model: 'gemini-2.5-flash-lite', prompt: 'hello' });
+    const result = await callLlm({ model: 'gemini-3.5-flash', prompt: 'hello' });
 
     expect(result.text).toBe('failover ok');
     expect(result.modelSelectedBy).toBe('preferred_failover');
@@ -113,8 +139,9 @@ describe('callLlm validation (before API)', () => {
 
     await expect(
       callLlm({
-        model: 'gemini-2.5-flash-lite',
+        model: 'allam-2-7b-off',
         prompt: 'hello',
+        capabilities: { structuredJson: true },
         structuredOutput: { responseJsonSchema: { type: 'object' } },
       }),
     ).rejects.toBeInstanceOf(LlmCapabilityError);
@@ -125,9 +152,9 @@ describe('callLlm validation (before API)', () => {
     const generateContent = vi.fn().mockResolvedValue(createTextResponse('ok'));
     installClient(generateContent);
 
-    await callLlm({ model: 'gemini-2.5-pro', prompt: 'hello' });
+    await callLlm({ model: 'gemini-3.1-pro-high', prompt: 'hello' });
 
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('gemini-2.5-pro'));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('gemini-3.1-pro-high'));
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('free-tier quota'));
     warnSpy.mockRestore();
   });
@@ -149,6 +176,6 @@ describe('resolveCallModel', () => {
   });
 
   it('falls back to default model id when no model or tier', () => {
-    expect(resolveCallModel({})).toBe('gemini-3.1-flash-lite-minimal');
+    expect(resolveCallModel({})).toBe('gemini-3.5-flash-minimal');
   });
 });

@@ -29,6 +29,10 @@ Thumbs.db
 calibration/speed-benchmark.json
 calibration/speed-tier-assignments.json
 
+# Live LLM fixtures (local per machine; README is committed)
+calibration/live-fixtures/*
+!calibration/live-fixtures/README.md
+
 #cursor
 .cursorrules
 .cursor/

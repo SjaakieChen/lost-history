@@ -8,7 +8,7 @@ import { callLlm, getModelsBySpeedTier } from '../server/gemini.js';
 
 dotenv.config();
 
-const TEST_MODEL = 'gemini-2.5-flash-lite-off';
+const TEST_MODEL = 'gemini-3.5-flash-minimal';
 
 async function main() {
   const apiKey = getApiKey();

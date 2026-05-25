@@ -33,7 +33,7 @@ describe('withRateLimitAndRetry', () => {
       .mockRejectedValueOnce({ status: 429, message: 'rate limit' })
       .mockResolvedValueOnce('ok');
 
-    const promise = withRateLimitAndRetry('gemini-2.5-flash', { rpm: 0 }, operation);
+    const promise = withRateLimitAndRetry('gemini-3.5-flash', { rpm: 0 }, operation);
 
     await vi.runAllTimersAsync();
     const result = await promise;
@@ -48,7 +48,7 @@ describe('withRateLimitAndRetry', () => {
     vi.useFakeTimers();
 
     const operation = vi.fn().mockRejectedValue({ status: 429, message: 'rate limit' });
-    const promise = withRateLimitAndRetry('gemini-2.5-flash', undefined, operation);
+    const promise = withRateLimitAndRetry('gemini-3.5-flash', undefined, operation);
     const expectation = expect(promise).rejects.toBeInstanceOf(GeminiQuotaError);
 
     await vi.runAllTimersAsync();
@@ -93,15 +93,15 @@ describe('formatQuotaError', () => {
   });
 
   it('wraps cause in GeminiQuotaError with model id', () => {
-    const error = formatQuotaError('gemini-2.5-flash-lite', new Error('429 quota'));
+    const error = formatQuotaError('gemini-3.5-flash', new Error('429 quota'));
     expect(error).toBeInstanceOf(GeminiQuotaError);
-    expect(error.model).toBe('gemini-2.5-flash-lite');
+    expect(error.model).toBe('gemini-3.5-flash');
     expect(error.message).toContain('Gemini rate limit (RPM)');
   });
 
   it('marks model exhausted when formatting quota error', () => {
-    formatQuotaError('gemini-2.5-flash-lite', new Error('429 quota'));
-    expect(isExhausted('gemini-2.5-flash-lite')).toBe(true);
+    formatQuotaError('gemini-3.5-flash', new Error('429 quota'));
+    expect(isExhausted('gemini-3.5-flash')).toBe(true);
   });
 });
 
@@ -115,11 +115,11 @@ describe('withRateLimitAndRetry exhaustion hook', () => {
     vi.useFakeTimers();
 
     const operation = vi.fn().mockRejectedValue({ status: 429, message: 'rate limit' });
-    const promise = withRateLimitAndRetry('gemini-2.5-flash', undefined, operation);
+    const promise = withRateLimitAndRetry('gemini-3.5-flash', undefined, operation);
     const expectation = expect(promise).rejects.toBeInstanceOf(GeminiQuotaError);
 
     await vi.runAllTimersAsync();
     await expectation;
-    expect(isExhausted('gemini-2.5-flash')).toBe(true);
+    expect(isExhausted('gemini-3.5-flash')).toBe(true);
   });
 });

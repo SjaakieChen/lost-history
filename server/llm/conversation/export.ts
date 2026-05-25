@@ -3,7 +3,9 @@ import type {
   ChatMessage,
   ExportMessagesOptions,
 } from '../../../shared/gemini-types.js';
-import { formatAssistantToolStep } from './tool-tags.js';
+import { formatAgentStepAssistantContent } from './transcript.js';
+import { stripToolCallBlocks } from './tool-tags.js';
+import { stripSpecialistBlocks } from './specialist-tags.js';
 
 /**
  * Builds a portable `ChatMessage[]` transcript from base messages and agent steps.
@@ -23,10 +25,21 @@ export function exportToMessages(
     if (!includeToolSummary && message.role === 'tool') {
       continue;
     }
-    if (!includeToolSummary && message.role === 'assistant' && message.content.includes('<tool_call')) {
-      const visible = message.content.replace(/<tool_call[\s\S]*?<\/tool_call>/g, '').trim();
-      if (visible) {
-        out.push({ role: 'assistant', content: visible });
+    if (
+      !includeToolSummary &&
+      message.role === 'assistant' &&
+      (message.content.includes('<tool_call') ||
+        message.content.includes('<web_search') ||
+        message.content.includes('<code_execution'))
+    ) {
+      const visible = stripToolCallBlocks(stripSpecialistBlocks(message.content));
+      if (visible || message.thoughts) {
+        out.push({
+          role: 'assistant',
+          content: visible || message.content,
+          thoughts: message.thoughts,
+          model: message.model,
+        });
       }
       continue;
     }
@@ -43,7 +56,12 @@ export function exportToMessages(
       if (includeToolSummary) {
         out.push({
           role: 'assistant',
-          content: formatAssistantToolStep(visibleText, step.functionCalls),
+          content: formatAgentStepAssistantContent(
+            visibleText,
+            step.functionCalls,
+            step.executedTools,
+          ),
+          thoughts: step.thoughts,
           model: stepModel,
         });
         for (const tool of step.toolResults ?? []) {
@@ -60,8 +78,20 @@ export function exportToMessages(
       continue;
     }
 
-    if (visibleText) {
-      out.push({ role: 'assistant', content: visibleText, model: stepModel });
+    if (visibleText || step.executedTools?.length) {
+      out.push({
+        role: 'assistant',
+        content: formatAgentStepAssistantContent(visibleText, undefined, step.executedTools),
+        thoughts: step.thoughts,
+        model: stepModel,
+      });
+    } else if (step.thoughts) {
+      out.push({
+        role: 'assistant',
+        content: '',
+        thoughts: step.thoughts,
+        model: stepModel,
+      });
     }
   }
 

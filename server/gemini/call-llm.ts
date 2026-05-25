@@ -20,11 +20,14 @@ import type {
 
   LlmFunctionCall,
 
+  LlmProviderRequestSnapshot,
+
   SpeedTier,
 
   ThinkingPower,
 
 } from '../../shared/gemini-types.js';
+import { buildProviderRequestSnapshot } from '../llm/provider-request-snapshot.js';
 
 import {
   buildNoReachableModelsError,
@@ -67,10 +70,19 @@ import {
   appendGroqAssistantMessage,
   type ProviderThreadState,
 } from '../llm/conversation/index.js';
+import {
+  assertResolvedModelSupportsCapabilities,
+  CallLlmValidationError,
+  resolveCallCapabilities,
+  validateCallLlmOptions,
+  type CapabilityActivation,
+} from '../llm/call-capabilities.js';
 import { generateWithGroq } from '../groq/generate.js';
 import { getGroqApiKey } from '../config.js';
+import { parseGeminiGroundingMetadata } from './grounding.js';
+import { buildTranscriptTurnFromResult } from '../llm/conversation/transcript.js';
 
-export { LlmCapabilityError };
+export { CallLlmValidationError, LlmCapabilityError };
 
 /** Server-only options (thread state is not accepted over HTTP). */
 export interface InternalCallLlmOptions extends CallLlmOptions {
@@ -79,10 +91,15 @@ export interface InternalCallLlmOptions extends CallLlmOptions {
   threadRebuildMessages?: ChatMessage[];
   /** Shared exhaustion cache for callLlmAgent / LlmSession; created per call when omitted. */
   exhaustionContext?: ExhaustionContext;
+  /** Capture native provider request payload on this call (dev debug). */
+  captureProviderRequest?: boolean;
+  /** Resolved specialist activation (set by callLlm). */
+  capabilityActivation?: CapabilityActivation;
 }
 
 export interface InternalCallLlmResult extends CallLlmResult {
   threadState?: ProviderThreadState;
+  providerRequest?: LlmProviderRequestSnapshot;
 }
 
 
@@ -293,6 +310,37 @@ interface BuiltRequestConfig {
 
 
 
+function buildGeminiToolsConfig(
+  options: CallLlmOptions,
+  activation: CapabilityActivation,
+): Record<string, unknown> | undefined {
+  const toolEntries: Record<string, unknown>[] = [];
+
+  if (activation.webSearch) {
+    toolEntries.push({ googleSearch: {} });
+  }
+
+  if (activation.tools && options.tools?.length) {
+    toolEntries.push({
+      functionDeclarations: normalizeToolDeclarations(options.tools),
+    });
+  }
+
+  if (toolEntries.length === 0) {
+    return undefined;
+  }
+
+  const config: Record<string, unknown> = { tools: toolEntries };
+
+  if (activation.tools && options.functionCallingMode) {
+    config.toolConfig = {
+      functionCallingConfig: { mode: mapFunctionCallingMode(options.functionCallingMode) },
+    };
+  }
+
+  return config;
+}
+
 function buildRequestConfig(
 
   options: CallLlmOptions,
@@ -301,20 +349,28 @@ function buildRequestConfig(
 
   thinkingPower: ThinkingPower,
 
+  activation: CapabilityActivation,
+
 ): BuiltRequestConfig {
 
-  if (options.tools?.length) {
-
+  if (activation.tools) {
     assertCapability(resolved.info, 'functionCalling');
-
   }
 
+  if (activation.webSearch) {
+    assertCapability(resolved.info, 'webSearch');
+  }
 
+  if (activation.codeExecution) {
+    assertCapability(resolved.info, 'codeExecution');
+  }
 
-  if (options.structuredOutput) {
-
+  if (activation.structuredJson) {
     assertCapability(resolved.info, 'structuredOutput');
+  }
 
+  if (activation.strictJson) {
+    assertCapability(resolved.info, 'strictJson');
   }
 
 
@@ -343,25 +399,14 @@ function buildRequestConfig(
 
 
 
-  if (options.tools?.length) {
-
-    config.toolsConfig = {
-
-      tools: [{ functionDeclarations: normalizeToolDeclarations(options.tools) }],
-
-      toolConfig: options.functionCallingMode
-
-        ? { functionCallingConfig: { mode: mapFunctionCallingMode(options.functionCallingMode) } }
-
-        : undefined,
-
-    };
-
+  const toolsConfig = buildGeminiToolsConfig(options, activation);
+  if (toolsConfig) {
+    config.toolsConfig = toolsConfig;
   }
 
 
 
-  if (options.structuredOutput) {
+  if (activation.structuredJson && options.structuredOutput) {
 
     config.structuredConfig = {
 
@@ -464,18 +509,47 @@ type ModelSelectionMetadata = {
   modelSelectedBy: CallLlmResult['modelSelectedBy'];
 };
 
+function resolveUserPromptForTranscript(options: InternalCallLlmOptions): string {
+  if (options.prompt?.trim()) {
+    return options.prompt.trim();
+  }
+  const history = options.messages ?? options.threadRebuildMessages;
+  if (!history?.length) {
+    return '';
+  }
+  const lastUser = [...history].reverse().find((message) => message.role === 'user');
+  return lastUser?.content?.trim() ?? '';
+}
+
+function attachTranscriptToResult(
+  result: InternalCallLlmResult,
+  options: InternalCallLlmOptions,
+): InternalCallLlmResult {
+  const userPrompt = resolveUserPromptForTranscript(options);
+  if (!userPrompt) {
+    return result;
+  }
+  return {
+    ...result,
+    messages: buildTranscriptTurnFromResult({ userPrompt, result }),
+  };
+}
+
 function buildGroqResult(
   groqResult: Awaited<ReturnType<typeof generateWithGroq>>,
   resolved: ResolvedTextModel,
   metadata: ModelSelectionMetadata,
+  options: InternalCallLlmOptions,
   threadState?: ProviderThreadState,
 ): InternalCallLlmResult {
-  return {
+  const base: InternalCallLlmResult = {
     text: groqResult.text,
+    thoughts: groqResult.thoughts,
     functionCalls: groqResult.functionCalls,
+    executedTools: groqResult.executedTools,
     model: groqResult.model,
     registryKey: resolved.registryKey,
-    thinkingUsed: false,
+    thinkingUsed: Boolean(groqResult.thoughts?.trim()),
     thinkingPowerApplied: resolved.info.bakedThinkingPower,
     finishReason: groqResult.finishReason,
     usage: groqResult.usage,
@@ -486,6 +560,7 @@ function buildGroqResult(
     modelSelectedBy: metadata.modelSelectedBy,
     threadState,
   };
+  return attachTranscriptToResult(base, options);
 }
 
 
@@ -496,14 +571,21 @@ function buildResult(
   thinkingPower: ThinkingPower,
   thinkingConfig: ReturnType<typeof buildThinkingConfig>,
   metadata: ModelSelectionMetadata,
+  options: InternalCallLlmOptions,
+  activation: CapabilityActivation,
   threadState?: ProviderThreadState,
 ): InternalCallLlmResult {
   const { text, thoughts, functionCalls } = parseResponseParts(response);
+  const candidate = response.candidates?.[0] as Record<string, unknown> | undefined;
+  const executedTools = activation.webSearch
+    ? parseGeminiGroundingMetadata(candidate)
+    : undefined;
 
-  return {
+  const base: InternalCallLlmResult = {
     text: text || 'No response text received.',
     thoughts,
     functionCalls,
+    executedTools,
     model: response.modelVersion?.replace(/^models\//, '') || resolved.apiModelId,
     registryKey: resolved.registryKey,
     thinkingUsed: isThinkingApplied(thinkingConfig),
@@ -517,6 +599,7 @@ function buildResult(
     modelSelectedBy: metadata.modelSelectedBy,
     threadState,
   };
+  return attachTranscriptToResult(base, options);
 }
 
 async function executeResolvedCall(
@@ -529,6 +612,9 @@ async function executeResolvedCall(
   const thinkingPower = candidate.info.bakedThinkingPower;
   const thread = resolveThreadForCall(candidate, options);
   const provider = candidate.info.provider ?? 'gemini';
+  const providerRequest = options.captureProviderRequest
+    ? buildProviderRequestSnapshot(candidate, thread, requestConfig, options)
+    : undefined;
 
   if (provider === 'groq') {
     if (thread.provider !== 'groq') {
@@ -539,11 +625,13 @@ async function executeResolvedCall(
       options,
       encodeGroqMessages(thread),
       exhaustionCtx,
+      options.capabilityActivation,
     );
     if (groqResult.assistantMessage) {
       appendGroqAssistantMessage(thread, groqResult.assistantMessage);
     }
-    return buildGroqResult(groqResult, candidate, metadata, thread);
+    const groqBuilt = buildGroqResult(groqResult, candidate, metadata, options, thread);
+    return providerRequest ? { ...groqBuilt, providerRequest } : groqBuilt;
   }
 
   if (thread.provider !== 'gemini') {
@@ -556,14 +644,23 @@ async function executeResolvedCall(
     throw new Error('Unexpected Groq marker from Gemini execute path.');
   }
   appendGeminiModelResponse(thread, response);
-  return buildResult(
+  const geminiBuilt = buildResult(
     response,
     candidate,
     thinkingPower,
     requestConfig.thinkingConfig,
     metadata,
+    options,
+    options.capabilityActivation ?? {
+      tools: false,
+      webSearch: false,
+      codeExecution: false,
+      structuredJson: false,
+      strictJson: false,
+    },
     thread,
   );
+  return providerRequest ? { ...geminiBuilt, providerRequest } : geminiBuilt;
 }
 
 
@@ -573,14 +670,18 @@ export async function callLlm(options: InternalCallLlmOptions): Promise<Internal
     throw new Error('Either prompt or messages is required.');
   }
 
-  const exhaustionCtx = options.exhaustionContext ?? createExhaustionContext();
-
-  const requestedTier = resolveRequestedSpeedTier(options);
-  const modelsAttempted: string[] = [];
-  const candidateOptions = {
-    requireFunctionCalling: Boolean(options.tools?.length),
-    requireStructuredOutput: Boolean(options.structuredOutput),
+  validateCallLlmOptions(options);
+  const resolvedCapabilities = resolveCallCapabilities(options);
+  const callOptions: InternalCallLlmOptions = {
+    ...options,
+    capabilityActivation: resolvedCapabilities.activation,
   };
+
+  const exhaustionCtx = callOptions.exhaustionContext ?? createExhaustionContext();
+
+  const requestedTier = resolveRequestedSpeedTier(callOptions);
+  const modelsAttempted: string[] = [];
+  const candidateOptions = resolvedCapabilities.candidateFilters;
 
   let lastError: unknown;
   const allCandidatesForError: ResolvedTextModel[] = [];
@@ -588,21 +689,26 @@ export async function callLlm(options: InternalCallLlmOptions): Promise<Internal
   let preferredCandidate: ResolvedTextModel | undefined;
   let usedPreferredFailover = false;
 
-  if (options.model?.trim()) {
-    preferredCandidate = resolveTextModel(options.model.trim());
+  if (callOptions.model?.trim()) {
+    preferredCandidate = resolveTextModel(callOptions.model.trim());
+    assertResolvedModelSupportsCapabilities(
+      preferredCandidate,
+      resolvedCapabilities.activation,
+    );
     if (!modelsAttempted.includes(preferredCandidate.registryKey)) {
       modelsAttempted.push(preferredCandidate.registryKey);
     }
 
     try {
       const requestConfig = buildRequestConfig(
-        options,
+        callOptions,
         preferredCandidate,
         preferredCandidate.info.bakedThinkingPower,
+        resolvedCapabilities.activation,
       );
       return await executeResolvedCall(
         preferredCandidate,
-        options,
+        callOptions,
         requestConfig,
         {
           requestedTier,
@@ -628,7 +734,7 @@ export async function callLlm(options: InternalCallLlmOptions): Promise<Internal
   const skipRegistryKey = preferredCandidate?.registryKey;
 
   for (const { candidates: tierCandidates } of iterateSpeedTierBatchesForFailover(
-    options,
+    callOptions,
     candidateOptions,
     startTier,
     skipRegistryKey,
@@ -666,7 +772,12 @@ export async function callLlm(options: InternalCallLlmOptions): Promise<Internal
       let requestConfig: BuiltRequestConfig;
 
       try {
-        requestConfig = buildRequestConfig(options, candidate, thinkingPower);
+        requestConfig = buildRequestConfig(
+          callOptions,
+          candidate,
+          thinkingPower,
+          resolvedCapabilities.activation,
+        );
       } catch (error) {
         lastError = error;
         continue;
@@ -675,7 +786,7 @@ export async function callLlm(options: InternalCallLlmOptions): Promise<Internal
       try {
         const result = await executeResolvedCall(
           candidate,
-          options,
+          callOptions,
           requestConfig,
           {
             requestedTier,
@@ -783,11 +894,14 @@ export function resolveCallModel(options: CallLlmOptions): string {
 
 
 
+  validateCallLlmOptions(options);
+  const { candidateFilters } = resolveCallCapabilities(options);
   const tier = resolveRequestedSpeedTier(options);
-  const candidates = iterateSpeedTierBatchesForFailover(options, {
-    requireFunctionCalling: Boolean(options.tools?.length),
-    requireStructuredOutput: Boolean(options.structuredOutput),
-  }, tier).next().value?.candidates ?? [];
+  const candidates = iterateSpeedTierBatchesForFailover(
+    options,
+    candidateFilters,
+    tier,
+  ).next().value?.candidates ?? [];
 
   if (candidates.length > 0) {
     return candidates[0].registryKey;

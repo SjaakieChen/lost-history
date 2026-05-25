@@ -31,15 +31,15 @@ describe('POST /api/scene-agent', () => {
     vi.spyOn(runSceneAgentModule, 'runSceneAgent').mockResolvedValue({
       text: 'Placed a red candle.',
       sceneState: updatedState,
-      model: 'gemini-2.5-flash-lite',
-      registryKey: 'gemini-2.5-flash-lite-off',
+      model: 'gemini-3.5-flash',
+      registryKey: 'gemini-3.1-flash-lite-minimal',
       thinkingUsed: false,
-      thinkingPowerApplied: 'off',
+      thinkingPowerApplied: 'minimal',
       terminationReason: 'final_tool',
       steps: [
         {
           step: 1,
-          model: 'gemini-2.5-flash-lite-off',
+          model: 'gemini-3.1-flash-lite-minimal',
           toolResults: [{ name: 'place_instance', response: { ok: true } }],
         },
       ],
@@ -50,7 +50,7 @@ describe('POST /api/scene-agent', () => {
       .post('/api/scene-agent')
       .send({
         prompt: 'Place a red candle at depth 15',
-        model: 'gemini-2.5-flash-lite-off',
+        model: 'gemini-3.1-flash-lite-minimal',
         sceneState: createDefaultSceneState(),
       })
       .expect(200);

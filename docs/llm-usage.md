@@ -51,6 +51,77 @@ OpenAPI-style declarations:
 
 `Record<string, (args) => Promise<object> | object>` — required for `callLlmAgent`.
 
+### `capabilities`
+
+Specialist features beyond speed tiers. Set a key to `true` only when you need it for **this** call. Omitted keys are not required. Features do **not** turn on from `tools[]` or `structuredOutput` alone.
+
+| Key | What it does | Required payload |
+|-----|----------------|------------------|
+| `tools` | **Your** function declarations (handlers in `callLlmAgent`) | Non-empty `tools[]` |
+| `webSearch` | Provider built-in web search (Gemini Google Search grounding; Groq Compound) | None |
+| `codeExecution` | Provider built-in code execution (Groq Compound implicit; GPT-OSS `code_interpreter` tool) | None |
+| `structuredJson` | JSON matching a schema (best-effort) | `structuredOutput` with schema |
+| `strictJson` | Guaranteed schema match (implies `structuredJson`) | Same `structuredOutput` |
+
+**Structured vs strict:** `structuredJson` means the model should follow your schema; failover may use best-effort mode (`strict: false` on Groq). `strictJson` narrows routing and enables Groq `strict: true` only when you set this flag — failover to GPT-OSS without `strictJson` will **not** send strict mode.
+
+**Rules:**
+
+1. `strictJson: true` requires `structuredJson: true` and `structuredOutput` with a schema.
+2. `tools: true` requires non-empty `tools[]`.
+3. Do not pass `tools[]` or `structuredOutput` without the matching capability flag (400).
+4. Do not use Groq Compound with `capabilities.tools` (no local function calling).
+5. `callLlmAgent` always sets `capabilities.tools: true` for your tool loop.
+
+```ts
+await callLlm({
+  capabilities: { tools: true },
+  tools: [{ name: 'lookup', description: '...', parameters: { type: 'object', properties: {} } }],
+  prompt: 'Use lookup',
+});
+
+await callLlm({
+  capabilities: { webSearch: true },
+  speedTier: 'moderate',
+  prompt: 'Summarize today’s news about Pompeii',
+});
+
+await callLlm({
+  capabilities: { structuredJson: true, strictJson: true },
+  structuredOutput: {
+    responseJsonSchema: {
+      type: 'object',
+      properties: { title: { type: 'string' } },
+      required: ['title'],
+      additionalProperties: false,
+    },
+  },
+  prompt: 'Return JSON',
+});
+```
+
+Use `GET /api/models` to see `supportsFunctionCalling`, `supportsWebSearch`, `supportsCodeExecution`, `supportsStructuredOutput`, and `supportsStrictJson` per registry row.
+
+### Unified message history
+
+Every `callLlm` result can include:
+
+- `text` — user-facing answer (`message.content` / visible Gemini text).
+- `thoughts` — internal reasoning (Gemini thought parts; Groq `message.reasoning`).
+- `functionCalls` — **your** tools only.
+- `executedTools` — built-in runs (parsed from Gemini `groundingMetadata` or Groq `executed_tools`).
+- `messages` — portable `ChatMessage[]` for this turn (user + assistant), with specialist tags embedded in `assistant.content`:
+
+```text
+<web_search>{"queries":[...],"sources":[...]}</web_search>
+<code_execution>{"code":"...","output":"...","type":"python"}</code_execution>
+<tool_call name="pick_number">...</tool_call>
+```
+
+`LlmSession` stores the same shape via `exportMessages()`. Use `messages` (or session export) when switching models so search/code context survives provider changes.
+
+**Testing:** Rigorous checks for which field holds what (API vs transcript vs session) live in offline mock tests (`tests/integration/unified-history-*.mock.test.ts`, `tests/helpers/capability-output-expectations.ts`). Live capability tests (`npm run test:llm:live`) are smoke-only — one pass per provider to confirm APIs still respond.
+
 ---
 
 ## `callLlm`
@@ -75,9 +146,10 @@ const result = await callLlm({
 | `model` | no | tier routing | Registry id, API id, or alias — **preference**; recoverable failures fail over starting from this model's `speedTier` |
 | `speedTier` | no | from default model | `'instant' \| 'fast' \| 'moderate' \| 'slow'`; used when `model` omitted; does not override preferred model's tier anchor when both are set |
 | `systemInstruction` | no | — | Also from `messages` system role |
-| `tools` | no | — | Enables function calling |
+| `capabilities` | no | all off | Specialist routing + activation (see above) |
+| `tools` | no | — | Your tool declarations; requires `capabilities.tools: true` |
 | `functionCallingMode` | no | provider default | `'AUTO' \| 'ANY' \| 'NONE' \| 'VALIDATED'` |
-| `structuredOutput` | no | — | `{ responseJsonSchema }` or `{ responseSchema }` |
+| `structuredOutput` | no | — | Requires `capabilities.structuredJson` or `strictJson` |
 | `maxOutputTokens` | no | provider default | |
 | `includeThoughts` | no | on when thinking active | Include reasoning in `result.thoughts` |
 
@@ -142,7 +214,7 @@ Handlers should return structured success/failure (`{ ok: true }` / `{ ok: false
 import { LlmSession } from '../server/gemini.js';
 
 const session = new LlmSession({
-  model: 'gemini-2.5-flash-lite',
+  model: 'gemini-3.5-flash',
   messages: [{ role: 'user', content: 'Hello' }],
 });
 
@@ -178,7 +250,7 @@ Merges session options with agent options; updates internal transcript from `res
 ## Cross-model chaining
 
 ```ts
-const gemini = new LlmSession({ model: 'gemini-2.5-flash-lite', prompt: '...' });
+const gemini = new LlmSession({ model: 'gemini-3.5-flash', prompt: '...' });
 await gemini.runAgent({ tools, toolHandlers });
 
 const groq = new LlmSession({
@@ -238,7 +310,7 @@ Scene manipulation agent for the game UI. Uses `callLlmAgent` with a **catalog-o
 |-------|----------|-------|
 | `sceneState` | yes | `LandscapeSceneState` — background, instances, viewer, sun |
 | `prompt` or `messages` | one required | For follow-ups, send full `messages` including the new user turn (the UI appends the latest instruction before each request) |
-| `model` | no | Registry id (e.g. `gemini-2.5-flash-lite-off`, `openai--gpt-oss-120b-off`); must support **local** function calling |
+| `model` | no | Registry id (e.g. `gemini-3.5-flash-minimal`, `openai--gpt-oss-120b-off`); must support **local** function calling |
 | `speedTier` | no | Default `moderate` if `model` omitted |
 | `maxSteps` | no | Default 12 |
 
@@ -253,7 +325,7 @@ Types: [`shared/scene-agent-types.ts`](../shared/scene-agent-types.ts), catalog:
 ```bash
 curl -s http://localhost:3001/api/scene-agent \
   -H "Content-Type: application/json" \
-  -d '{"prompt":"Place a red candle at depth 15m","model":"gemini-2.5-flash-lite-off","sceneState":{"backgroundUrl":"/landscapes/default.svg","instances":[],"viewer":{"positionX":0,"headYaw":0,"headPitch":0},"sun":{"azimuth":180,"elevation":45}}}'
+  -d '{"prompt":"Place a red candle at depth 15m","model":"gemini-3.5-flash-minimal","sceneState":{"backgroundUrl":"/landscapes/default.svg","instances":[],"viewer":{"positionX":0,"headYaw":0,"headPitch":0},"sun":{"azimuth":180,"elevation":45}}}'
 ```
 
 ---
@@ -263,10 +335,32 @@ curl -s http://localhost:3001/api/scene-agent \
 
 - Prefer `callLlm` / `callLlmAgent` / `LlmSession` over raw provider SDKs — quota, policy blocks, and tier failover are handled centrally.
 - Set `model` when you want a specific registry entry; recoverable errors still fail over within that model's speed tier (then downgrades).
-- Use `tools` only with models that support function calling; routing enforces this before tier ordering.
+- Set `capabilities.tools` (and pass `tools[]`) for your function-calling loop; routing enforces `requireFunctionCalling` before tier ordering.
+- Set `capabilities.strictJson` when you need guaranteed schema match on Groq OSS; otherwise use `structuredJson` only.
 - Check `registryKey` (not API `model` id) when locking or displaying which model served a turn.
 
 See [llm-internals.md](./llm-internals.md#failure-policy-and-failover) for full policy tables.
+
+### Live capability smoke tests
+
+With `GEMINI_API_KEY` and/or `GROQ_API_KEY` in `.env`:
+
+```bash
+npm run test:llm:live
+```
+
+`tests/live/capabilities.live.test.ts` exercises each `capabilities` flag (Gemini and Groq web search are separate cases). Groq-only tests skip without `GROQ_API_KEY`; Gemini-only tests skip without `GEMINI_API_KEY`.
+
+### Live fixtures (transcript + session timeline)
+
+Record local snapshots in the **exact runtime shapes** (`ChatMessage[]`, `SessionTurnRecord[]`, `CallLlmResult`, per-turn `contextSent`) to inspect what context each turn received:
+
+```bash
+npm run test:llm:live:record    # writes calibration/live-fixtures/{version}/
+npm run test:llm:fixture-contract
+```
+
+See [`calibration/live-fixtures/README.md`](../calibration/live-fixtures/README.md). Fixtures are gitignored; only the README is committed.
 
 ---
 
@@ -275,6 +369,8 @@ See [llm-internals.md](./llm-internals.md#failure-policy-and-failover) for full 
 | Avoid | Why |
 |-------|-----|
 | Manual tool loops with repeated `callLlm` | Use `callLlmAgent` or `LlmSession` |
+| Pass `tools` without `capabilities.tools` | Set `capabilities: { tools: true }` |
+| Pass `structuredOutput` without `capabilities.structuredJson` | Set structured capability flags |
 | Expect `/api/chat` to run tools or JSON schema | Use `/api/llm` or `callLlm` |
 | Assume HTTP remembers chat | No session DB — resend `messages` or use `LlmSession` server-side |
 | Parse internal thread state from HTTP | Not exposed; use `messages` / `exportMessages` |

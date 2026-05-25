@@ -12,6 +12,8 @@
     "test": "vitest run --exclude tests/live",
     "test:llm": "vitest run --exclude tests/live",
     "test:llm:live": "vitest run tests/live",
+    "test:llm:live:record": "vitest run tests/live",
+    "test:llm:fixture-contract": "vitest run tests/unit/live-fixture-contract.test.ts",
     "test:gemini": "tsx scripts/test-gemini.ts",
     "calibrate:speed": "tsx scripts/calibrate-speed-tiers.ts",
     "calibrate:multiturn": "tsx scripts/calibrate-multiturn-speed.ts",

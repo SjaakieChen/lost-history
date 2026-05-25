@@ -13,7 +13,7 @@ vi.mock('../../server/config.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../server/config.js')>();
   return {
     ...actual,
-    getGroqApiKey: vi.fn(() => 'test-groq-key'),
+    getGroqApiKey: vi.fn(() => undefined),
   };
 });
 
@@ -68,7 +68,7 @@ describe('callLlmAgent failover (matrix C/D)', () => {
     installGemini(get, generateContent);
 
     const result = await callLlmAgent({
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-3.5-flash',
       prompt: 'When?',
       tools: [getYearTool],
       toolHandlers: { get_year: async () => ({ year: 476 }) },
@@ -76,11 +76,11 @@ describe('callLlmAgent failover (matrix C/D)', () => {
 
     expect(result.steps.length).toBeGreaterThanOrEqual(2);
     expect(result.steps.every((s) => s.model === result.registryKey)).toBe(true);
-    expect(result.registryKey).toBe('gemini-2.5-flash-lite-medium');
+    expect(result.registryKey).toBe('gemini-3.5-flash-medium');
   });
 
   it('C2: step 1 preferred quota failovers and agent completes', async () => {
-    const preferredApi = 'gemini-2.5-flash-lite';
+    const preferredApi = 'gemini-3.5-flash';
     let callCount = 0;
     const get = vi.fn().mockResolvedValue({});
     const generateContent = vi.fn().mockImplementation(({ model }: { model: string }) => {
@@ -98,7 +98,7 @@ describe('callLlmAgent failover (matrix C/D)', () => {
     installGemini(get, generateContent);
 
     const result = await callLlmAgent({
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-3.5-flash',
       prompt: 'When did Rome fall?',
       tools: [getYearTool],
       toolHandlers: { get_year: async () => ({ year: 476 }) },
@@ -109,7 +109,7 @@ describe('callLlmAgent failover (matrix C/D)', () => {
   });
 
   it('C3: step 2 pinned quota failovers and agent completes', async () => {
-    const preferredApi = 'gemini-2.5-flash-lite';
+    const preferredApi = 'gemini-3.5-flash';
     let generateCalls = 0;
     const get = vi.fn().mockResolvedValue({});
     const generateContent = vi.fn().mockImplementation(({ model }: { model: string }) => {
@@ -127,7 +127,7 @@ describe('callLlmAgent failover (matrix C/D)', () => {
     installGemini(get, generateContent);
 
     const result = await callLlmAgent({
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-3.5-flash',
       prompt: 'Multi step',
       tools: [getYearTool],
       toolHandlers: { get_year: async () => ({ year: 1 }) },
@@ -149,7 +149,7 @@ describe('callLlmAgent failover (matrix C/D)', () => {
     installGemini(get, generateContent);
 
     const result = await callLlmAgent({
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-3.5-flash',
       prompt: 'Export test',
       tools: [getYearTool],
       toolHandlers: { get_year: async () => ({ year: 1 }) },
@@ -191,7 +191,7 @@ describe('callLlmAgent failover (matrix C/D)', () => {
   });
 
   it('D2: same provider failover keeps agent on gemini registry keys', async () => {
-    const preferredApi = 'gemini-2.5-flash-lite';
+    const preferredApi = 'gemini-3.5-flash';
     let step = 0;
     const get = vi.fn().mockResolvedValue({});
     const generateContent = vi.fn().mockImplementation(({ model }: { model: string }) => {
@@ -209,7 +209,7 @@ describe('callLlmAgent failover (matrix C/D)', () => {
     installGemini(get, generateContent);
 
     const result = await callLlmAgent({
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-3.5-flash',
       prompt: 'Same provider failover',
       tools: [getYearTool],
       toolHandlers: { get_year: async () => ({ year: 1 }) },

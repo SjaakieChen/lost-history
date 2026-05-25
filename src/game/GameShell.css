@@ -205,3 +205,138 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+.scene-agent__model-context {
+  margin-top: 0.5rem;
+}
+
+.model-context {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid #c5d4e8;
+  border-radius: 8px;
+  background: #f8fafc;
+  font-size: 0.8rem;
+  max-height: min(70vh, 640px);
+  overflow-y: auto;
+}
+
+.model-context__intro {
+  margin: 0 0 0.75rem;
+  color: #444;
+  line-height: 1.4;
+}
+
+.model-context__section {
+  margin-bottom: 0.75rem;
+}
+
+.model-context__section h4,
+.model-context__section h5,
+.model-context__section h6 {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+}
+
+.model-context__meta {
+  margin: 0 0 0.35rem;
+  color: #666;
+}
+
+.model-context__json {
+  margin: 0.25rem 0;
+  padding: 0.5rem;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.75rem;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.model-context__block {
+  margin: 0.35rem 0;
+}
+
+.model-context__block summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #2c4a6e;
+}
+
+.model-context__steps {
+  margin: 0;
+  padding-left: 1.1rem;
+  list-style: decimal;
+}
+
+.model-context__step {
+  margin-bottom: 0.75rem;
+}
+
+.model-context__step-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+  color: #555;
+}
+
+.model-context__step-header strong {
+  color: #222;
+}
+
+.model-context__messages {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.model-context__message {
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  border-left: 3px solid #ccc;
+  background: #fff;
+}
+
+.model-context__message--user {
+  border-left-color: #2c4a6e;
+}
+
+.model-context__message--assistant {
+  border-left-color: #3a7d44;
+}
+
+.model-context__message--tool {
+  border-left-color: #9a6b2e;
+}
+
+.model-context__message-role {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.model-context__message-body {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.75rem;
+}
+
+.model-context__toggle {
+  background: none;
+  border: none;
+  color: #2c4a6e;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+}

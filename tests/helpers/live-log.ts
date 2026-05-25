@@ -47,6 +47,20 @@ export function logLiveCallResult(label: string, result: CallLlmResult): void {
   if (result.thoughts?.trim()) {
     console.log(`  Thoughts preview:\n${preview(result.thoughts, THOUGHTS_PREVIEW_CHARS)}`);
   }
+  if (result.executedTools?.length) {
+    console.log(`  Executed tools:    ${result.executedTools.length}`);
+    console.log(
+      `  Executed preview:\n${preview(JSON.stringify(result.executedTools[0]), TEXT_PREVIEW_CHARS)}`,
+    );
+  }
+  if (result.messages?.length) {
+    const assistant = result.messages.find((m) => m.role === 'assistant');
+    if (assistant) {
+      console.log(
+        `  Transcript assistant:\n${preview(assistant.content, TEXT_PREVIEW_CHARS)}`,
+      );
+    }
+  }
   console.log('--- end ---\n');
 }
 

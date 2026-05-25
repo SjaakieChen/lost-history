@@ -27,48 +27,48 @@ describe('exhaustion tracker', () => {
   });
 
   it('is not exhausted before mark', () => {
-    expect(isExhausted('gemini-2.5-flash-lite')).toBe(false);
+    expect(isExhausted('gemini-3.5-flash')).toBe(false);
   });
 
   it('is exhausted immediately after mark', () => {
-    markExhausted('gemini-2.5-flash-lite');
-    expect(isExhausted('gemini-2.5-flash-lite')).toBe(true);
+    markExhausted('gemini-3.5-flash');
+    expect(isExhausted('gemini-3.5-flash')).toBe(true);
   });
 
   it('expires RPM cooldown after ~60s with fake timers', () => {
     vi.useFakeTimers();
-    markExhausted('gemini-2.5-flash-lite', { rpm: 5 });
-    expect(isExhausted('gemini-2.5-flash-lite')).toBe(true);
+    markExhausted('gemini-3.5-flash', { rpm: 5 });
+    expect(isExhausted('gemini-3.5-flash')).toBe(true);
 
     vi.advanceTimersByTime(61_000);
-    expect(isExhausted('gemini-2.5-flash-lite')).toBe(false);
+    expect(isExhausted('gemini-3.5-flash')).toBe(false);
   });
 
   it('uses retryAfterMs TTL when provided', () => {
     vi.useFakeTimers();
-    markExhausted('gemini-2.5-flash-lite', { rpd: 20, rpm: 10 }, 40_000);
-    expect(isExhausted('gemini-2.5-flash-lite')).toBe(true);
+    markExhausted('gemini-3.5-flash', { rpd: 20, rpm: 10 }, 40_000);
+    expect(isExhausted('gemini-3.5-flash')).toBe(true);
 
     vi.advanceTimersByTime(40_500);
-    expect(isExhausted('gemini-2.5-flash-lite')).toBe(false);
+    expect(isExhausted('gemini-3.5-flash')).toBe(false);
   });
 
   it('persists RPD exhaustion until UTC midnight when dailyQuotaExhausted', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-05-24T12:00:00Z'));
-    markExhausted('gemini-2.5-flash', { rpd: 20, rpm: 5 }, undefined, 'test', true);
+    markExhausted('gemini-3.5-flash', { rpd: 20, rpm: 5 }, undefined, 'test', true);
 
     vi.advanceTimersByTime(30 * 60_000);
-    expect(isExhausted('gemini-2.5-flash')).toBe(true);
+    expect(isExhausted('gemini-3.5-flash')).toBe(true);
 
     vi.advanceTimersByTime(12 * 60 * 60_000);
-    expect(isExhausted('gemini-2.5-flash')).toBe(false);
+    expect(isExhausted('gemini-3.5-flash')).toBe(false);
   });
 
   it('clearExhausted removes entry immediately', () => {
-    markExhausted('gemini-2.5-flash-lite');
-    clearExhausted('gemini-2.5-flash-lite');
-    expect(isExhausted('gemini-2.5-flash-lite')).toBe(false);
+    markExhausted('gemini-3.5-flash');
+    clearExhausted('gemini-3.5-flash');
+    expect(isExhausted('gemini-3.5-flash')).toBe(false);
   });
 
   it('resetExhaustionState clears all entries', () => {
@@ -90,10 +90,10 @@ describe('pingModel', () => {
 
   it('returns true when models.get succeeds', async () => {
     mockedGetGenAIClient.mockReturnValue({
-      models: { get: vi.fn().mockResolvedValue({ name: 'gemini-2.5-flash-lite' }) },
+      models: { get: vi.fn().mockResolvedValue({ name: 'gemini-3.5-flash' }) },
     } as never);
 
-    const result = await pingModel('gemini-2.5-flash-lite', 'gemini-2.5-flash-lite');
+    const result = await pingModel('gemini-3.5-flash', 'gemini-3.5-flash');
     expect(result).toBe(true);
   });
 
@@ -116,17 +116,17 @@ describe('pingModel', () => {
       },
     } as never);
 
-    const result = await pingModel('gemini-2.5-flash', 'gemini-2.5-flash', { rpm: 5 });
+    const result = await pingModel('gemini-3.5-flash', 'gemini-3.5-flash', { rpm: 5 });
     expect(result).toBe(false);
-    expect(isExhausted('gemini-2.5-flash')).toBe(false);
+    expect(isExhausted('gemini-3.5-flash')).toBe(false);
   });
 
   it('returns false when model is locally exhausted without calling API', async () => {
-    markExhausted('gemini-2.5-flash-lite');
+    markExhausted('gemini-3.5-flash');
     const get = vi.fn();
     mockedGetGenAIClient.mockReturnValue({ models: { get } } as never);
 
-    const result = await pingModel('gemini-2.5-flash-lite', 'gemini-2.5-flash-lite');
+    const result = await pingModel('gemini-3.5-flash', 'gemini-3.5-flash');
     expect(result).toBe(false);
     expect(get).not.toHaveBeenCalled();
   });
@@ -144,19 +144,19 @@ describe('pingAllModels', () => {
     const get = vi
       .fn()
       .mockRejectedValueOnce({ status: 429, message: 'rate limit' })
-      .mockResolvedValueOnce({ name: 'gemini-2.5-flash-lite' })
+      .mockResolvedValueOnce({ name: 'gemini-3.5-flash' })
       .mockResolvedValueOnce({ name: 'gemini-3.5-flash' });
     mockedGetGenAIClient.mockReturnValue({ models: { get } } as never);
 
     const reachable = await pingAllModels([
       { apiModelId: 'gemini-3.1-flash-lite', registryKey: 'gemini-3.1-flash-lite' },
-      { apiModelId: 'gemini-2.5-flash-lite', registryKey: 'gemini-2.5-flash-lite' },
+      { apiModelId: 'gemini-3.5-flash', registryKey: 'gemini-3.5-flash' },
       { apiModelId: 'gemini-3.5-flash', registryKey: 'gemini-3.5-flash' },
     ]);
 
     expect(get).toHaveBeenCalledTimes(3);
     expect(reachable.has('gemini-3.1-flash-lite')).toBe(false);
-    expect(reachable.has('gemini-2.5-flash-lite')).toBe(true);
+    expect(reachable.has('gemini-3.5-flash')).toBe(true);
     expect(reachable.has('gemini-3.5-flash')).toBe(true);
   });
 });

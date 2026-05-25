@@ -12,7 +12,7 @@ describe('rebuildThreadForProvider (matrix D3/F)', () => {
   ];
 
   it('D3: rebuilds valid Gemini thread from messages', () => {
-    const resolved = resolveTextModel('gemini-2.5-flash-lite');
+    const resolved = resolveTextModel('gemini-3.5-flash');
     const thread = rebuildThreadForProvider(messages, 'You are helpful', resolved);
 
     expect(thread.provider).toBe('gemini');
@@ -32,7 +32,7 @@ describe('rebuildThreadForProvider (matrix D3/F)', () => {
   });
 
   it('F2: createThreadState preserves tool role when model supports function calling', () => {
-    const resolved = resolveTextModel('gemini-2.5-flash-lite');
+    const resolved = resolveTextModel('gemini-3.5-flash');
     const messages: ChatMessage[] = [
       { role: 'user', content: 'Run tool' },
       { role: 'tool', toolName: 'get_year', content: '{"year":476}' },

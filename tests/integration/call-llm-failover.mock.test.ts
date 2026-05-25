@@ -62,16 +62,16 @@ describe('callLlm failover (matrix A)', () => {
     const generateContent = vi.fn().mockResolvedValue(createTextResponse('ok'));
     installGemini(get, generateContent);
 
-    const result = await callLlm({ model: 'gemini-2.5-flash-lite', prompt: 'Hi' });
+    const result = await callLlm({ model: 'gemini-3.5-flash', prompt: 'Hi' });
 
     expect(result.text).toBe('ok');
-    expect(result.registryKey).toBe('gemini-2.5-flash-lite-medium');
+    expect(result.registryKey).toBe('gemini-3.5-flash-medium');
     expect(result.modelSelectedBy).toBe('explicit');
     expect(generateContent).toHaveBeenCalledOnce();
   });
 
   it('A2: preferred quota then same-tier alternate succeeds', async () => {
-    const preferredApi = 'gemini-2.5-flash-lite';
+    const preferredApi = 'gemini-3.5-flash';
     const get = vi.fn().mockResolvedValue({});
     const generateContent = vi.fn().mockImplementation(({ model }: { model: string }) => {
       if (model === preferredApi) {
@@ -81,7 +81,7 @@ describe('callLlm failover (matrix A)', () => {
     });
     installGemini(get, generateContent);
 
-    const result = await callLlm({ model: 'gemini-2.5-flash-lite', prompt: 'Hi' });
+    const result = await callLlm({ model: 'gemini-3.5-flash', prompt: 'Hi' });
 
     expect(result.text).toBe('tier win');
     expect(result.modelSelectedBy).toBe('preferred_failover');
@@ -94,7 +94,7 @@ describe('callLlm failover (matrix A)', () => {
     installGemini(get, generateContent);
 
     await expect(
-      callLlm({ model: 'gemini-2.5-flash-lite', prompt: 'Hi' }),
+      callLlm({ model: 'gemini-3.5-flash', prompt: 'Hi' }),
     ).rejects.toBeInstanceOf(GeminiQuotaError);
   });
 
@@ -103,8 +103,9 @@ describe('callLlm failover (matrix A)', () => {
 
     await expect(
       callLlm({
-        model: 'gemini-2.5-flash-lite',
+        model: 'allam-2-7b-off',
         prompt: 'Hi',
+        capabilities: { structuredJson: true },
         structuredOutput: { responseJsonSchema: { type: 'object' } },
       }),
     ).rejects.toBeInstanceOf(LlmCapabilityError);
@@ -122,7 +123,7 @@ describe('callLlm failover (matrix A)', () => {
   });
 
   it('A7: preferred is not double-called in tier loop', async () => {
-    const preferredApi = 'gemini-2.5-flash-lite';
+    const preferredApi = 'gemini-3.5-flash';
     const get = vi.fn().mockResolvedValue({});
     const preferredCalls: string[] = [];
     const generateContent = vi.fn().mockImplementation(({ model }: { model: string }) => {
@@ -134,14 +135,14 @@ describe('callLlm failover (matrix A)', () => {
     });
     installGemini(get, generateContent);
 
-    await callLlm({ model: 'gemini-2.5-flash-lite', prompt: 'Hi' });
+    await callLlm({ model: 'gemini-3.5-flash', prompt: 'Hi' });
 
     expect(preferredCalls).toHaveLength(1);
   });
 
   it('A8: locally exhausted preferred is skipped in tier loop after quota', async () => {
-    markExhausted('gemini-2.5-flash-lite-medium');
-    const preferredApi = 'gemini-2.5-flash-lite';
+    markExhausted('gemini-3.5-flash-medium');
+    const preferredApi = 'gemini-3.5-flash';
     const get = vi.fn().mockResolvedValue({});
     const generateContent = vi.fn().mockImplementation(({ model }: { model: string }) => {
       if (model === preferredApi) {
@@ -151,23 +152,28 @@ describe('callLlm failover (matrix A)', () => {
     });
     installGemini(get, generateContent);
 
-    const result = await callLlm({ model: 'gemini-2.5-flash-lite', prompt: 'Hi' });
+    const result = await callLlm({ model: 'gemini-3.5-flash', prompt: 'Hi' });
 
     expect(result.text).toBe('after exhaust');
-    expect(result.registryKey).not.toBe('gemini-2.5-flash-lite-medium');
+    expect(result.registryKey).not.toBe('gemini-3.5-flash-medium');
     expect(result.modelSelectedBy).toBe('preferred_failover');
   });
 
   it('A3: tier downgrade when instant tier is exhausted', async () => {
     const tierBatches = [...iterateSpeedTierBatches({ speedTier: 'instant' })];
-    const instantCandidates = tierBatches[0].candidates;
+    const geminiInstantCount = tierBatches[0].candidates.filter(
+      (candidate) => (candidate.info.provider ?? 'gemini') === 'gemini',
+    ).length;
 
     const get = vi.fn().mockResolvedValue({});
-    const generateContent = vi.fn();
-    for (let i = 0; i < instantCandidates.length; i += 1) {
-      generateContent.mockRejectedValueOnce(quotaError());
-    }
-    generateContent.mockResolvedValueOnce(createTextResponse('downgraded'));
+    let generateCalls = 0;
+    const generateContent = vi.fn().mockImplementation(() => {
+      generateCalls += 1;
+      if (generateCalls <= geminiInstantCount) {
+        return Promise.reject(quotaError());
+      }
+      return Promise.resolve(createTextResponse('downgraded'));
+    });
     installGemini(get, generateContent);
 
     const result = await callLlm({ speedTier: 'instant', prompt: 'Hi' });
@@ -182,7 +188,7 @@ describe('callLlm failover (matrix A)', () => {
     const get = vi
       .fn()
       .mockRejectedValueOnce({ status: 429, message: 'rate limit' })
-      .mockResolvedValue({ name: 'gemini-2.5-flash-lite' });
+      .mockResolvedValue({ name: 'gemini-3.5-flash' });
     const generateContent = vi.fn().mockResolvedValue(createTextResponse('reachable'));
     installGemini(get, generateContent);
 
@@ -194,7 +200,7 @@ describe('callLlm failover (matrix A)', () => {
 
   it('policy block failovers and logs warning', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const preferredApi = 'gemini-2.5-flash-lite';
+    const preferredApi = 'gemini-3.5-flash';
     const get = vi.fn().mockResolvedValue({});
     const generateContent = vi.fn().mockImplementation(({ model }: { model: string }) => {
       if (model === preferredApi) {
@@ -206,7 +212,7 @@ describe('callLlm failover (matrix A)', () => {
     });
     installGemini(get, generateContent);
 
-    const result = await callLlm({ model: 'gemini-2.5-flash-lite', prompt: 'Hi' });
+    const result = await callLlm({ model: 'gemini-3.5-flash', prompt: 'Hi' });
 
     expect(result.text).toBe('policy failover');
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Policy/safety block'));
@@ -214,7 +220,7 @@ describe('callLlm failover (matrix A)', () => {
   });
 
   it('401 on preferred model failovers to tier candidate', async () => {
-    const preferredApi = 'gemini-2.5-flash-lite';
+    const preferredApi = 'gemini-3.5-flash';
     const get = vi.fn().mockResolvedValue({});
     const generateContent = vi.fn().mockImplementation(({ model }: { model: string }) => {
       if (model === preferredApi) {
@@ -226,7 +232,7 @@ describe('callLlm failover (matrix A)', () => {
     });
     installGemini(get, generateContent);
 
-    const result = await callLlm({ model: 'gemini-2.5-flash-lite', prompt: 'Hi' });
+    const result = await callLlm({ model: 'gemini-3.5-flash', prompt: 'Hi' });
 
     expect(result.text).toBe('auth failover');
     expect(result.modelSelectedBy).toBe('preferred_failover');
@@ -248,6 +254,7 @@ describe('callLlm failover (matrix A)', () => {
     const result = await callLlm({
       speedTier: 'instant',
       prompt: 'Use tool',
+      capabilities: { tools: true },
       tools: [lookupTool],
     });
 
@@ -261,13 +268,50 @@ describe('callLlm failover (matrix A)', () => {
     installGemini(get, generateContent);
 
     try {
-      await callLlm({ model: 'gemini-2.5-flash-lite', prompt: 'Hi' });
+      await callLlm({ model: 'gemini-3.5-flash', prompt: 'Hi' });
       expect.fail('expected quota error');
     } catch (error) {
       expect(error).toBeInstanceOf(GeminiQuotaError);
       const quotaErr = error as GeminiQuotaError;
       expect(quotaErr.blockedModels?.length).toBeGreaterThan(0);
     }
+  });
+
+  it('structuredJson on OSS uses strict false when strictJson capability is off', async () => {
+    const { getGroqApiKey } = await import('../../server/config.js');
+    vi.mocked(getGroqApiKey).mockReturnValue('test-groq-key');
+    process.env.GROQ_API_KEY = 'test-groq-key';
+
+    const schema = {
+      type: 'object',
+      properties: { x: { type: 'string' } },
+      required: ['x'],
+      additionalProperties: false,
+    };
+
+    const create = vi.fn().mockResolvedValue({
+      choices: [{ message: { content: '{"x":"y"}' }, finish_reason: 'stop' }],
+      model: 'openai/gpt-oss-120b',
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    });
+    installGroq(create);
+
+    await callLlm({
+      model: 'openai/gpt-oss-120b',
+      prompt: 'JSON',
+      capabilities: { structuredJson: true },
+      structuredOutput: { responseJsonSchema: schema },
+    });
+
+    expect(create).toHaveBeenCalledOnce();
+    expect(create.mock.calls[0][0].response_format).toEqual({
+      type: 'json_schema',
+      json_schema: {
+        name: 'structured_output',
+        strict: false,
+        schema,
+      },
+    });
   });
 
   it('A10: Groq preferred quota can failover to Gemini tier candidate', async () => {

@@ -41,12 +41,25 @@ describe('Groq models registry', () => {
     expect(compound.info.supportsWebSearch).toBe(true);
     expect(compound.info.supportsCodeExecution).toBe(true);
     expect(compound.info.supportsStrictJson).toBe(false);
+    expect(compound.info.speedTier).toBe('fast');
+  });
+
+  it('assigns compound-mini to instant and gpt-oss-120b to moderate', () => {
+    expect(resolveTextModel('groq--compound-mini-off').info.speedTier).toBe('instant');
+    expect(resolveTextModel('openai--gpt-oss-120b-off').info.speedTier).toBe('moderate');
   });
 
   it('tags gpt-oss models with strict JSON support', () => {
     const oss20 = resolveTextModel('openai--gpt-oss-20b-off');
     expect(oss20.info.supportsStrictJson).toBe(true);
     expect(oss20.info.supportsStructuredOutput).toBe(true);
+  });
+
+  it('tags gpt-oss models with code execution support', () => {
+    const oss20 = resolveTextModel('openai--gpt-oss-20b-off');
+    const oss120 = resolveTextModel('openai--gpt-oss-120b-off');
+    expect(oss20.info.supportsCodeExecution).toBe(true);
+    expect(oss120.info.supportsCodeExecution).toBe(true);
   });
 
   it('includes Groq probes in calibration matrix', () => {

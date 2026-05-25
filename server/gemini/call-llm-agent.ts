@@ -46,6 +46,7 @@ import { createExhaustionContext } from './availability.js';
 import { isInvalidModelOutput, isRecoverableLlmFailure } from './failure-policy.js';
 import { resolveTextModel } from './models.js';
 
+import { serializeProviderThread } from '../llm/provider-request-snapshot.js';
 import { callLlm, type InternalCallLlmOptions } from './call-llm.js';
 
 
@@ -432,6 +433,60 @@ function syncThreadAfterCall(
 
 
 
+function buildAgentDebugBundle(
+
+  captureDebug: boolean,
+
+  agentOptions: CallLlmAgentOptions,
+
+  effectiveSystemInstruction: string | undefined,
+
+  toolDeclarations: CallLlmAgentOptions['tools'],
+
+  steps: AgentStep[],
+
+  exportedMessages: ChatMessage[],
+
+  thread: ProviderThreadState | undefined,
+
+  accumulatedThoughts?: string,
+
+  accumulatedUsage?: GenerateTextUsage,
+
+): CallLlmAgentResult['debug'] | undefined {
+
+  if (!captureDebug) {
+
+    return undefined;
+
+  }
+
+
+
+  return {
+
+    sceneSystemInstruction: agentOptions.systemInstruction,
+
+    effectiveSystemInstruction,
+
+    tools: toolDeclarations ?? [],
+
+    messages: exportedMessages,
+
+    steps,
+
+    finalProviderThread: thread ? serializeProviderThread(thread) : undefined,
+
+    thoughts: accumulatedThoughts,
+
+    usage: accumulatedUsage,
+
+  };
+
+}
+
+
+
 function buildAgentResult(
 
   lastResult: Awaited<ReturnType<typeof callLlm>>,
@@ -451,6 +506,8 @@ function buildAgentResult(
     allModelsAttempted: string[];
 
     exportedMessages: ChatMessage[];
+
+    debug?: CallLlmAgentResult['debug'];
 
   },
 
@@ -494,6 +551,8 @@ function buildAgentResult(
 
     messages: options.exportedMessages,
 
+    debug: options.debug,
+
   };
 
 }
@@ -501,6 +560,8 @@ function buildAgentResult(
 
 
 export async function callLlmAgent(options: CallLlmAgentOptions): Promise<CallLlmAgentResult> {
+
+  const captureDebug = options.debug === true;
 
   const maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
 
@@ -598,6 +659,11 @@ export async function callLlmAgent(options: CallLlmAgentOptions): Promise<CallLl
 
         ...options,
 
+        capabilities: {
+          ...options.capabilities,
+          tools: true,
+        },
+
         model: unlockForFailover ? options.model : (lockedRegistryKey ?? options.model),
 
         prompt: thread ? undefined : options.prompt,
@@ -613,6 +679,8 @@ export async function callLlmAgent(options: CallLlmAgentOptions): Promise<CallLl
         threadRebuildMessages,
 
         exhaustionContext: exhaustionCtx,
+
+        captureProviderRequest: captureDebug,
 
       };
 
@@ -712,9 +780,13 @@ export async function callLlmAgent(options: CallLlmAgentOptions): Promise<CallLl
 
       functionCalls: result.functionCalls,
 
+      executedTools: result.executedTools,
+
       finishReason: result.finishReason,
 
       durationMs: stepDurationMs,
+
+      providerRequest: captureDebug ? result.providerRequest : undefined,
 
     };
 
@@ -757,6 +829,28 @@ export async function callLlmAgent(options: CallLlmAgentOptions): Promise<CallLl
         allModelsAttempted,
 
         exportedMessages,
+
+        debug: buildAgentDebugBundle(
+
+          captureDebug,
+
+          options,
+
+          systemInstruction,
+
+          tools,
+
+          steps,
+
+          exportedMessages,
+
+          thread,
+
+          accumulatedThoughts,
+
+          accumulatedUsage,
+
+        ),
 
       });
 
@@ -873,6 +967,28 @@ export async function callLlmAgent(options: CallLlmAgentOptions): Promise<CallLl
         allModelsAttempted,
 
         exportedMessages: exportToMessages(baseMessages, steps, { includeToolSummary: true }),
+
+        debug: buildAgentDebugBundle(
+
+          captureDebug,
+
+          options,
+
+          systemInstruction,
+
+          tools,
+
+          steps,
+
+          exportToMessages(baseMessages, steps, { includeToolSummary: true }),
+
+          thread,
+
+          accumulatedThoughts,
+
+          accumulatedUsage,
+
+        ),
 
       });
 

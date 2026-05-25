@@ -54,7 +54,7 @@ describe('LlmSession (matrix E)', () => {
       .mockResolvedValueOnce(createTextResponse('second'));
     installClient(get, generateContent);
 
-    const session = new LlmSession({ model: 'gemini-2.5-flash-lite' });
+    const session = new LlmSession({ model: 'gemini-3.5-flash' });
     await session.send({ prompt: 'Hello' });
     await session.send({ prompt: 'Follow up' });
 
@@ -68,12 +68,12 @@ describe('LlmSession (matrix E)', () => {
     const generateContent = vi.fn().mockResolvedValue(createTextResponse('reply'));
     installClient(get, generateContent);
 
-    const session = new LlmSession({ model: 'gemini-2.5-flash-lite', prompt: 'Hi' });
+    const session = new LlmSession({ model: 'gemini-3.5-flash', prompt: 'Hi' });
     await session.send();
 
     const messages = session.exportMessages();
     const assistant = messages.find((m) => m.role === 'assistant');
-    expect(assistant?.model).toBe('gemini-2.5-flash-lite-medium');
+    expect(assistant?.model).toBe('gemini-3.5-flash-medium');
   });
 
   it('E3: runAgent export without tool summary omits tool roles', async () => {
@@ -86,7 +86,7 @@ describe('LlmSession (matrix E)', () => {
       );
     installClient(get, generateContent);
 
-    const session = new LlmSession({ model: 'gemini-2.5-flash-lite', prompt: 'Agent' });
+    const session = new LlmSession({ model: 'gemini-3.5-flash', prompt: 'Agent' });
     await session.runAgent({
       tools: [getYearTool],
       toolHandlers: { get_year: async () => ({ year: 1 }) },
@@ -98,7 +98,7 @@ describe('LlmSession (matrix E)', () => {
   });
 
   it('E4: different models per step after failover on second send', async () => {
-    const preferredApi = 'gemini-2.5-flash-lite';
+    const preferredApi = 'gemini-3.5-flash';
     const get = vi.fn().mockResolvedValue({});
     let sendCount = 0;
     const generateContent = vi.fn().mockImplementation(({ model }: { model: string }) => {
@@ -110,7 +110,7 @@ describe('LlmSession (matrix E)', () => {
     });
     installClient(get, generateContent);
 
-    const session = new LlmSession({ model: 'gemini-2.5-flash-lite', prompt: 'First' });
+    const session = new LlmSession({ model: 'gemini-3.5-flash', prompt: 'First' });
     await session.send();
     await session.send({ prompt: 'Second' });
 
@@ -123,7 +123,7 @@ describe('LlmSession (matrix E)', () => {
   });
 
   it('E5: session lockedRegistryKey updates after failover on second send', async () => {
-    const preferredApi = 'gemini-2.5-flash-lite';
+    const preferredApi = 'gemini-3.5-flash';
     const get = vi.fn().mockResolvedValue({});
     let sendCount = 0;
     const generateContent = vi.fn().mockImplementation(({ model }: { model: string }) => {
@@ -135,7 +135,7 @@ describe('LlmSession (matrix E)', () => {
     });
     installClient(get, generateContent);
 
-    const session = new LlmSession({ model: 'gemini-2.5-flash-lite', prompt: 'First' });
+    const session = new LlmSession({ model: 'gemini-3.5-flash', prompt: 'First' });
     await session.send();
     await session.send({ prompt: 'Second' });
 

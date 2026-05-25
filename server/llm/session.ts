@@ -4,18 +4,48 @@ import type {
   CallLlmResult,
   ChatMessage,
   ExportMessagesOptions,
+  LlmProvider,
   LlmSessionOptions,
 } from '../../shared/gemini-types.js';
 import { createExhaustionContext } from '../gemini/availability.js';
 import { callLlmAgent } from '../gemini/call-llm-agent.js';
 import { callLlm, type InternalCallLlmOptions, type InternalCallLlmResult } from '../gemini/call-llm.js';
 import { exportToMessages } from './conversation/export.js';
+import {
+  buildTranscriptTurnFromResult,
+  formatAssistantTurnContent,
+} from './conversation/transcript.js';
 
 export interface SessionTurnRecord {
   role: ChatMessage['role'];
   content: string;
+  thoughts?: string;
   model?: string;
   toolName?: string;
+}
+
+/** Snapshot of inputs passed to `callLlm` for one `LlmSession.send()` (fixture/debug). */
+export interface LiveFixtureCallContext {
+  prompt?: string;
+  messages?: ChatMessage[];
+  threadRebuildMessages?: ChatMessage[];
+  hasThreadState: boolean;
+  threadProvider?: LlmProvider;
+}
+
+export function snapshotCallContext(
+  callOptions: Pick<
+    InternalCallLlmOptions,
+    'prompt' | 'messages' | 'threadRebuildMessages' | 'threadState'
+  >,
+): LiveFixtureCallContext {
+  return {
+    prompt: callOptions.prompt,
+    messages: callOptions.messages,
+    threadRebuildMessages: callOptions.threadRebuildMessages,
+    hasThreadState: Boolean(callOptions.threadState),
+    threadProvider: callOptions.threadState?.provider,
+  };
 }
 
 export class LlmSession {
@@ -24,6 +54,7 @@ export class LlmSession {
   private readonly turns: SessionTurnRecord[] = [];
   private agentSteps: import('../../shared/gemini-types.js').AgentStep[] = [];
   private readonly exhaustionContext = createExhaustionContext();
+  private lastCallContext: LiveFixtureCallContext | undefined;
 
   constructor(private readonly options: LlmSessionOptions) {
     if (options.messages?.length) {
@@ -32,7 +63,9 @@ export class LlmSession {
           this.turns.push({
             role: message.role,
             content: message.content,
+            thoughts: message.thoughts,
             toolName: message.toolName,
+            model: message.model,
           });
         }
       }
@@ -46,6 +79,7 @@ export class LlmSession {
     return this.turns.map((turn) => ({
       role: turn.role,
       content: turn.content,
+      ...(turn.thoughts ? { thoughts: turn.thoughts } : {}),
       ...(turn.toolName ? { toolName: turn.toolName } : {}),
       ...(turn.model ? { model: turn.model } : {}),
     }));
@@ -69,17 +103,36 @@ export class LlmSession {
       exhaustionContext: this.exhaustionContext,
     };
 
+    this.lastCallContext = snapshotCallContext(callOptions);
+
     const result: InternalCallLlmResult = await callLlm(callOptions);
     if (result.threadState) {
       this.thread = result.threadState;
     }
     this.lockedRegistryKey = result.registryKey;
 
-    this.turns.push({
-      role: 'assistant',
-      content: result.text,
-      model: result.registryKey,
-    });
+    const assistantTurn =
+      result.messages?.find((message) => message.role === 'assistant') ??
+      buildTranscriptTurnFromResult({
+        userPrompt: prompt ?? '',
+        result,
+      }).find((message) => message.role === 'assistant');
+
+    if (assistantTurn) {
+      this.turns.push({
+        role: 'assistant',
+        content: assistantTurn.content,
+        thoughts: assistantTurn.thoughts,
+        model: assistantTurn.model ?? result.registryKey,
+      });
+    } else {
+      this.turns.push({
+        role: 'assistant',
+        content: formatAssistantTurnContent(result),
+        thoughts: result.thoughts,
+        model: result.registryKey,
+      });
+    }
 
     const { threadState: _threadState, ...publicResult } = result;
     return publicResult;
@@ -103,6 +156,7 @@ export class LlmSession {
         this.turns.push({
           role: message.role,
           content: message.content,
+          thoughts: message.thoughts,
           model: message.model,
           toolName: message.toolName,
         });
@@ -121,5 +175,17 @@ export class LlmSession {
 
   getModelHistory(): SessionTurnRecord[] {
     return [...this.turns];
+  }
+
+  getLastCallContext(): LiveFixtureCallContext | undefined {
+    return this.lastCallContext ? { ...this.lastCallContext } : undefined;
+  }
+
+  getLockedRegistryKey(): string | undefined {
+    return this.lockedRegistryKey;
+  }
+
+  getSessionOptions(): LlmSessionOptions {
+    return { ...this.options };
   }
 }

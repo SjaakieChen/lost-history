@@ -8,3 +8,11 @@ export function hasLiveApiKey(): boolean {
 export function hasLiveTestKeys(): boolean {
   return Boolean(getApiKey() && getGroqApiKey());
 }
+
+export function hasGeminiLiveKey(): boolean {
+  return Boolean(getApiKey());
+}
+
+export function hasGroqLiveKey(): boolean {
+  return Boolean(getGroqApiKey());
+}

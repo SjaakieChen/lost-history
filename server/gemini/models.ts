@@ -4,6 +4,7 @@ import type {
   TextModelInfo,
   ThinkingModeKind,
 } from '../../shared/gemini-types.js';
+import { compareRegistryStrength } from './model-ranking.js';
 import { buildBenchmarkLookup, loadSpeedBenchmarkReport } from './speed-benchmark.js';
 import { buildProbeMatrix } from './probe-matrix.js';
 import { inferGroqSpeedTier } from '../groq/models-base.js';
@@ -22,7 +23,7 @@ function buildRegistry(): Record<string, TextModelInfo> {
 
   for (const probe of probes) {
     const p50Ms = p50ByProbe.get(probe.probeKey);
-    const speedTier = resolveProbeSpeedTier(p50Ms, probe.bakedThinkingPower);
+    const speedTier = resolveProbeSpeedTier(p50Ms, probe.bakedThinkingPower, probe.probeKey);
 
     registry[probe.probeKey] = {
       id: probe.probeKey,
@@ -45,7 +46,7 @@ function buildRegistry(): Record<string, TextModelInfo> {
     };
   }
 
-  const order = buildSpeedTierModelOrder(registry, p50ByProbe);
+  const order = buildSpeedTierModelOrder(registry);
   return attachStrengthRanks(registry, order);
 }
 
@@ -69,7 +70,6 @@ function attachStrengthRanks(
 
 export function buildSpeedTierModelOrder(
   registry: Record<string, TextModelInfo>,
-  p50ByProbe: Map<string, number> = buildBenchmarkLookup(loadSpeedBenchmarkReport()),
 ): Record<SpeedTier, string[]> {
   const tiers: Record<SpeedTier, string[]> = {
     instant: [],
@@ -82,28 +82,13 @@ export function buildSpeedTierModelOrder(
     tiers[model.speedTier].push(model.id);
   }
 
-  const baseStrength = listBaseTextModels().map((model) => model.id);
-
   for (const tier of Object.keys(tiers) as SpeedTier[]) {
-    tiers[tier].sort((a, b) => {
-      const p50A = p50ByProbe.get(a);
-      const p50B = p50ByProbe.get(b);
-      if (p50A !== undefined && p50B !== undefined && p50A !== p50B) {
-        return p50A - p50B;
-      }
-      const baseA = baseStrength.indexOf(a.replace(/-(minimal|low|medium|high|off)$/, ''));
-      const baseB = baseStrength.indexOf(b.replace(/-(minimal|low|medium|high|off)$/, ''));
-      if (baseA !== -1 && baseB !== -1 && baseA !== baseB) {
-        return baseA - baseB;
-      }
-      return a.localeCompare(b);
-    });
+    tiers[tier].sort(compareRegistryStrength);
   }
 
   return tiers;
 }
 
-const BENCHMARK_LOOKUP = buildBenchmarkLookup(loadSpeedBenchmarkReport());
 const REGISTRY_WITHOUT_RANKS = (() => {
   const benchmark = loadSpeedBenchmarkReport();
   const p50ByProbe = buildBenchmarkLookup(benchmark);
@@ -111,7 +96,7 @@ const REGISTRY_WITHOUT_RANKS = (() => {
   const registry: Record<string, TextModelInfo> = {};
   for (const probe of probes) {
     const p50Ms = p50ByProbe.get(probe.probeKey);
-    const speedTier = resolveProbeSpeedTier(p50Ms, probe.bakedThinkingPower);
+    const speedTier = resolveProbeSpeedTier(p50Ms, probe.bakedThinkingPower, probe.probeKey);
     registry[probe.probeKey] = {
       id: probe.probeKey,
       apiModelId: probe.apiModelId,
@@ -135,10 +120,8 @@ const REGISTRY_WITHOUT_RANKS = (() => {
   return registry;
 })();
 
-export const SPEED_TIER_MODEL_ORDER: Record<SpeedTier, string[]> = buildSpeedTierModelOrder(
-  REGISTRY_WITHOUT_RANKS,
-  BENCHMARK_LOOKUP,
-);
+export const SPEED_TIER_MODEL_ORDER: Record<SpeedTier, string[]> =
+  buildSpeedTierModelOrder(REGISTRY_WITHOUT_RANKS);
 
 export const TEXT_MODEL_REGISTRY: Record<string, TextModelInfo> = attachStrengthRanks(
   REGISTRY_WITHOUT_RANKS,
@@ -349,10 +332,10 @@ export function getDefaultModelId(): string {
   if (fromEnv) {
     return fromEnv;
   }
-  if (TEXT_MODEL_REGISTRY['gemini-3.1-flash-lite-minimal']) {
-    return 'gemini-3.1-flash-lite-minimal';
+  if (TEXT_MODEL_REGISTRY['gemini-3.5-flash-minimal']) {
+    return 'gemini-3.5-flash-minimal';
   }
-  return SPEED_TIER_MODEL_ORDER.instant[0] ?? 'gemini-3.1-flash-lite-minimal';
+  return SPEED_TIER_MODEL_ORDER.instant[0] ?? 'gemini-3.5-flash-minimal';
 }
 
 export function getDefaultSpeedTier(): SpeedTier {
