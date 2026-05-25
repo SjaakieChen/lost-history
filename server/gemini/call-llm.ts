@@ -18,17 +18,26 @@ import type {
 
   GenerateTextUsage,
 
-  LlmContentBlock,
-
   LlmFunctionCall,
+
+  SpeedTier,
 
   ThinkingPower,
 
-  ThinkingPowerTier,
-
 } from '../../shared/gemini-types.js';
 
-import { buildNoReachableModelsError, markExhausted, pingAllModels, isExhausted } from './availability.js';
+import {
+  buildNoReachableModelsError,
+  createExhaustionContext,
+  type ExhaustionContext,
+  markExhausted,
+  pingAllModels,
+} from './availability.js';
+import {
+  isPolicyBlockedError,
+  isRecoverableLlmFailure,
+  logPolicyBlocked,
+} from './failure-policy.js';
 
 import { getGenAIClient } from './client.js';
 
@@ -41,23 +50,39 @@ import {
 } from './models.js';
 
 import {
-  collectModelCandidates,
-  isTierDowngraded,
-  resolveRequestedTier,
+  iterateSpeedTierBatchesForFailover,
+  isSpeedTierDowngraded,
+  resolveRequestedSpeedTier,
 } from './model-selection.js';
 
 import { formatQuotaError, GeminiQuotaError, isQuotaOrRateLimitError, parseQuotaErrorDetails, withRateLimitAndRetry } from './rate-limit.js';
 
 import { buildThinkingConfig, isThinkingApplied } from './thinking.js';
+import { normalizeToolDeclarations } from '../llm/tool-schema.js';
+import {
+  appendGeminiModelResponse,
+  createThreadState,
+  encodeGeminiContents,
+  encodeGroqMessages,
+  appendGroqAssistantMessage,
+  type ProviderThreadState,
+} from '../llm/conversation/index.js';
+import { generateWithGroq } from '../groq/generate.js';
+import { getGroqApiKey } from '../config.js';
 
 export { LlmCapabilityError };
 
+/** Server-only options (thread state is not accepted over HTTP). */
+export interface InternalCallLlmOptions extends CallLlmOptions {
+  threadState?: ProviderThreadState;
+  /** Portable messages used to rebuild thread when provider changes during failover. */
+  threadRebuildMessages?: ChatMessage[];
+  /** Shared exhaustion cache for callLlmAgent / LlmSession; created per call when omitted. */
+  exhaustionContext?: ExhaustionContext;
+}
 
-
-function resolveThinkingPower(options: CallLlmOptions): ThinkingPower {
-
-  return options.thinkingPower ?? 'off';
-
+export interface InternalCallLlmResult extends CallLlmResult {
+  threadState?: ProviderThreadState;
 }
 
 
@@ -72,61 +97,53 @@ function resolveSystemInstruction(options: CallLlmOptions): string | undefined {
 
 
 
-export function buildLlmContents(options: CallLlmOptions): string | Content[] {
+function resolveThreadForCall(
+  candidate: ResolvedTextModel,
+  options: InternalCallLlmOptions,
+): ProviderThreadState {
+  const provider = candidate.info.provider ?? 'gemini';
 
-  if (options.contents?.length) {
-
-    return options.contents as Content[];
-
+  if (options.threadState) {
+    if (options.threadState.provider === provider) {
+      return options.threadState;
+    }
+    const rebuildFrom = options.threadRebuildMessages ?? options.messages;
+    if (rebuildFrom?.length || options.prompt?.trim()) {
+      return createThreadState(candidate, {
+        messages: rebuildFrom,
+        prompt: options.threadState ? undefined : options.prompt,
+        systemInstruction: options.systemInstruction,
+      });
+    }
+    throw new Error(
+      `threadState provider "${options.threadState.provider}" does not match model provider "${provider}" and no rebuild messages were provided.`,
+    );
   }
 
-
-
-  if (options.messages?.length) {
-
-    return options.messages
-
-      .filter((message) => message.role !== 'system')
-
-      .map((message) => ({
-
-        role: message.role === 'assistant' ? 'model' : 'user',
-
-        parts: [{ text: message.content }],
-
-      }));
-
-  }
-
-
-
-  if (options.prompt?.trim()) {
-
-    return options.prompt.trim();
-
-  }
-
-
-
-  throw new Error('Either contents, prompt, or messages is required.');
-
+  return createThreadState(candidate, options);
 }
 
-
-
-export function normalizeLlmContentsToArray(contents: string | Content[]): Content[] {
-
-  if (typeof contents === 'string') {
-
-    return [{ role: 'user', parts: [{ text: contents }] }];
-
+function handleRecoverableFailure(
+  candidate: ResolvedTextModel,
+  error: unknown,
+  exhaustionCtx: ExhaustionContext,
+): void {
+  if (isPolicyBlockedError(error)) {
+    logPolicyBlocked(candidate.registryKey, error);
   }
 
-  return contents;
-
+  if (error instanceof GeminiQuotaError || isQuotaOrRateLimitError(error)) {
+    const parsed = parseQuotaErrorDetails(error);
+    markExhausted(
+      candidate.registryKey,
+      candidate.info.rateLimitHints,
+      parsed.retryAfterMs,
+      'generate:429',
+      parsed.dailyQuotaExhausted,
+      exhaustionCtx,
+    );
+  }
 }
-
-
 
 function mapUsage(response: GenerateContentResponse): GenerateTextUsage | undefined {
 
@@ -240,30 +257,6 @@ function parseResponseParts(response: GenerateContentResponse): {
 
 
 
-function toModelContent(response: GenerateContentResponse): LlmContentBlock | undefined {
-
-  const content = response.candidates?.[0]?.content;
-
-  if (!content) {
-
-    return undefined;
-
-  }
-
-
-
-  return {
-
-    role: content.role as LlmContentBlock['role'],
-
-    parts: content.parts as LlmContentBlock['parts'],
-
-  };
-
-}
-
-
-
 function mapFunctionCallingMode(
 
   mode: CallLlmOptions['functionCallingMode'],
@@ -284,49 +277,9 @@ function mapFunctionCallingMode(
 
 
 
-export function buildFunctionResponseContent(
-
-  name: string,
-
-  response: Record<string, unknown>,
-
-  id?: string,
-
-): LlmContentBlock {
-
-  return {
-
-    role: 'user',
-
-    parts: [
-
-      {
-
-        functionResponse: {
-
-          name,
-
-          response,
-
-          ...(id ? { id } : {}),
-
-        },
-
-      },
-
-    ],
-
-  };
-
-}
-
-
-
 interface BuiltRequestConfig {
 
   systemInstruction?: string;
-
-  temperature?: number;
 
   maxOutputTokens?: number;
 
@@ -382,8 +335,6 @@ function buildRequestConfig(
 
     systemInstruction: resolveSystemInstruction(options),
 
-    temperature: options.temperature,
-
     maxOutputTokens: options.maxOutputTokens,
 
     thinkingConfig,
@@ -396,7 +347,7 @@ function buildRequestConfig(
 
     config.toolsConfig = {
 
-      tools: [{ functionDeclarations: options.tools }],
+      tools: [{ functionDeclarations: normalizeToolDeclarations(options.tools) }],
 
       toolConfig: options.functionCallingMode
 
@@ -446,9 +397,27 @@ async function executeOnModel(
 
   requestConfig: BuiltRequestConfig,
 
-): Promise<GenerateContentResponse> {
+  exhaustionCtx: ExhaustionContext,
+
+): Promise<GenerateContentResponse | 'groq'> {
 
   const { apiModelId, info, registryKey } = resolved;
+
+  const provider = info.provider ?? 'gemini';
+
+
+
+  if (provider === 'groq') {
+
+    if (!getGroqApiKey()) {
+
+      throw new Error('Add GROQ_API_KEY to .env to use Groq models.');
+
+    }
+
+    return 'groq';
+
+  }
 
 
 
@@ -468,233 +437,281 @@ async function executeOnModel(
 
 
 
-  return withRateLimitAndRetry(registryKey, info.rateLimitHints, () =>
-
-    ai.models.generateContent({
-
-      model: apiModelId,
-
-      contents,
-
-      config: {
-
-        systemInstruction: requestConfig.systemInstruction,
-
-        temperature: requestConfig.temperature,
-
-        maxOutputTokens: requestConfig.maxOutputTokens,
-
-        thinkingConfig: requestConfig.thinkingConfig,
-
-        ...requestConfig.toolsConfig,
-
-        ...requestConfig.structuredConfig,
-
-      },
-
-    }),
-
+  return withRateLimitAndRetry(
+    registryKey,
+    info.rateLimitHints,
+    () =>
+      ai.models.generateContent({
+        model: apiModelId,
+        contents,
+        config: {
+          systemInstruction: requestConfig.systemInstruction,
+          maxOutputTokens: requestConfig.maxOutputTokens,
+          thinkingConfig: requestConfig.thinkingConfig,
+          ...requestConfig.toolsConfig,
+          ...requestConfig.structuredConfig,
+        },
+      }),
+    exhaustionCtx,
   );
+}
 
+
+
+type ModelSelectionMetadata = {
+  requestedTier: SpeedTier;
+  modelsAttempted: string[];
+  modelSelectedBy: CallLlmResult['modelSelectedBy'];
+};
+
+function buildGroqResult(
+  groqResult: Awaited<ReturnType<typeof generateWithGroq>>,
+  resolved: ResolvedTextModel,
+  metadata: ModelSelectionMetadata,
+  threadState?: ProviderThreadState,
+): InternalCallLlmResult {
+  return {
+    text: groqResult.text,
+    functionCalls: groqResult.functionCalls,
+    model: groqResult.model,
+    registryKey: resolved.registryKey,
+    thinkingUsed: false,
+    thinkingPowerApplied: resolved.info.bakedThinkingPower,
+    finishReason: groqResult.finishReason,
+    usage: groqResult.usage,
+    speedTierRequested: metadata.requestedTier,
+    speedTierUsed: resolved.tier,
+    speedTierDowngraded: isSpeedTierDowngraded(metadata.requestedTier, resolved.tier),
+    modelsAttempted: metadata.modelsAttempted,
+    modelSelectedBy: metadata.modelSelectedBy,
+    threadState,
+  };
 }
 
 
 
 function buildResult(
-
   response: GenerateContentResponse,
-
   resolved: ResolvedTextModel,
-
   thinkingPower: ThinkingPower,
-
   thinkingConfig: ReturnType<typeof buildThinkingConfig>,
-
-  metadata: {
-
-    requestedTier: ThinkingPowerTier;
-
-    modelsAttempted: string[];
-
-    modelSelectedBy: 'explicit' | 'tier';
-
-  },
-
-): CallLlmResult {
-
+  metadata: ModelSelectionMetadata,
+  threadState?: ProviderThreadState,
+): InternalCallLlmResult {
   const { text, thoughts, functionCalls } = parseResponseParts(response);
 
-
-
   return {
-
     text: text || 'No response text received.',
-
     thoughts,
-
     functionCalls,
-
-    modelContent: toModelContent(response),
-
     model: response.modelVersion?.replace(/^models\//, '') || resolved.apiModelId,
-
+    registryKey: resolved.registryKey,
     thinkingUsed: isThinkingApplied(thinkingConfig),
-
     thinkingPowerApplied: thinkingPower,
-
     finishReason: response.candidates?.[0]?.finishReason,
-
     usage: mapUsage(response),
-
-    thinkingPowerTierRequested: metadata.requestedTier,
-
-    thinkingPowerTierUsed: resolved.tier,
-
-    tierDowngraded: isTierDowngraded(metadata.requestedTier, resolved.tier),
-
+    speedTierRequested: metadata.requestedTier,
+    speedTierUsed: resolved.tier,
+    speedTierDowngraded: isSpeedTierDowngraded(metadata.requestedTier, resolved.tier),
     modelsAttempted: metadata.modelsAttempted,
-
     modelSelectedBy: metadata.modelSelectedBy,
-
+    threadState,
   };
+}
 
+async function executeResolvedCall(
+  candidate: ResolvedTextModel,
+  options: InternalCallLlmOptions,
+  requestConfig: BuiltRequestConfig,
+  metadata: ModelSelectionMetadata,
+  exhaustionCtx: ExhaustionContext,
+): Promise<InternalCallLlmResult> {
+  const thinkingPower = candidate.info.bakedThinkingPower;
+  const thread = resolveThreadForCall(candidate, options);
+  const provider = candidate.info.provider ?? 'gemini';
+
+  if (provider === 'groq') {
+    if (thread.provider !== 'groq') {
+      throw new Error('Groq model requires Groq thread state.');
+    }
+    const groqResult = await generateWithGroq(
+      candidate,
+      options,
+      encodeGroqMessages(thread),
+      exhaustionCtx,
+    );
+    if (groqResult.assistantMessage) {
+      appendGroqAssistantMessage(thread, groqResult.assistantMessage);
+    }
+    return buildGroqResult(groqResult, candidate, metadata, thread);
+  }
+
+  if (thread.provider !== 'gemini') {
+    throw new Error('Gemini model requires Gemini thread state.');
+  }
+
+  const contents = encodeGeminiContents(thread);
+  const response = await executeOnModel(candidate, contents, requestConfig, exhaustionCtx);
+  if (response === 'groq') {
+    throw new Error('Unexpected Groq marker from Gemini execute path.');
+  }
+  appendGeminiModelResponse(thread, response);
+  return buildResult(
+    response,
+    candidate,
+    thinkingPower,
+    requestConfig.thinkingConfig,
+    metadata,
+    thread,
+  );
 }
 
 
 
-export async function callLlm(options: CallLlmOptions): Promise<CallLlmResult> {
-
-  const thinkingPower = resolveThinkingPower(options);
-
-  const contents = buildLlmContents(options);
-
-  const requestedTier = resolveRequestedTier(options);
-
-  const explicitModel = Boolean(options.model?.trim());
-
-  const modelsAttempted: string[] = [];
-
-
-
-  const candidateOptions = {
-
-    requireFunctionCalling: Boolean(options.tools?.length),
-
-    requireStructuredOutput: Boolean(options.structuredOutput),
-
-  };
-
-
-
-  let lastError: unknown;
-
-  const allCandidates = collectModelCandidates(options, candidateOptions);
-  const reachableKeys = await pingAllModels(
-    allCandidates.map((candidate) => ({
-      apiModelId: candidate.apiModelId,
-      registryKey: candidate.registryKey,
-      rateLimitHints: candidate.info.rateLimitHints,
-    })),
-  );
-
-  const candidates = allCandidates.filter((candidate) =>
-    reachableKeys.has(candidate.registryKey),
-  );
-
-  if (candidates.length === 0) {
-    const locallyExhausted = allCandidates
-      .filter((candidate) => isExhausted(candidate.registryKey))
-      .map((candidate) => candidate.registryKey);
-  // #region agent log
-  fetch('http://127.0.0.1:7631/ingest/130840d0-116a-49e4-9207-dfd55fe50a73',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ae9da3'},body:JSON.stringify({sessionId:'ae9da3',hypothesisId:'H4',location:'call-llm.ts:callLlm',message:'zero reachable candidates',data:{explicitModel,requestedTier,allCandidateKeys:allCandidates.map((c)=>c.registryKey),reachableKeys:[...reachableKeys],locallyExhausted,hasTools:Boolean(options.tools?.length)},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-    throw buildNoReachableModelsError({
-      explicitModel,
-      requestedTier,
-      allCandidates,
-      reachableKeys,
-    });
+export async function callLlm(options: InternalCallLlmOptions): Promise<InternalCallLlmResult> {
+  if (!options.threadState && !options.prompt?.trim() && !options.messages?.length) {
+    throw new Error('Either prompt or messages is required.');
   }
 
-  for (const candidate of candidates) {
+  const exhaustionCtx = options.exhaustionContext ?? createExhaustionContext();
 
-    modelsAttempted.push(candidate.registryKey);
+  const requestedTier = resolveRequestedSpeedTier(options);
+  const modelsAttempted: string[] = [];
+  const candidateOptions = {
+    requireFunctionCalling: Boolean(options.tools?.length),
+    requireStructuredOutput: Boolean(options.structuredOutput),
+  };
 
+  let lastError: unknown;
+  const allCandidatesForError: ResolvedTextModel[] = [];
+  const allReachableKeys = new Set<string>();
+  let preferredCandidate: ResolvedTextModel | undefined;
+  let usedPreferredFailover = false;
 
-
-    let requestConfig: BuiltRequestConfig;
-
-    try {
-
-      requestConfig = buildRequestConfig(options, candidate, thinkingPower);
-
-    } catch (error) {
-
-      if (explicitModel) {
-
-        throw error;
-
-      }
-
-      lastError = error;
-
-      continue;
-
+  if (options.model?.trim()) {
+    preferredCandidate = resolveTextModel(options.model.trim());
+    if (!modelsAttempted.includes(preferredCandidate.registryKey)) {
+      modelsAttempted.push(preferredCandidate.registryKey);
     }
 
-
-
     try {
-
-      const response = await executeOnModel(candidate, contents, requestConfig);
-
-
-
-      return buildResult(response, candidate, thinkingPower, requestConfig.thinkingConfig, {
-
-        requestedTier,
-
-        modelsAttempted,
-
-        modelSelectedBy: explicitModel ? 'explicit' : 'tier',
-
-      });
-
+      const requestConfig = buildRequestConfig(
+        options,
+        preferredCandidate,
+        preferredCandidate.info.bakedThinkingPower,
+      );
+      return await executeResolvedCall(
+        preferredCandidate,
+        options,
+        requestConfig,
+        {
+          requestedTier,
+          modelsAttempted: [...modelsAttempted],
+          modelSelectedBy: 'explicit',
+        },
+        exhaustionCtx,
+      );
     } catch (error) {
-
       lastError = error;
-
-      const isQuotaFailure =
-        error instanceof GeminiQuotaError || isQuotaOrRateLimitError(error);
-
-      if (explicitModel) {
-        if (error instanceof GeminiQuotaError) {
-          throw error;
-        }
-        if (isQuotaOrRateLimitError(error)) {
-          throw formatQuotaError(candidate.registryKey, error, candidate.info.rateLimitHints);
-        }
+      if (error instanceof LlmCapabilityError) {
         throw error;
       }
+      if (!isRecoverableLlmFailure(error)) {
+        throw error;
+      }
+      handleRecoverableFailure(preferredCandidate, error, exhaustionCtx);
+      usedPreferredFailover = true;
+    }
+  }
 
-      if (isQuotaFailure) {
-        const parsed = parseQuotaErrorDetails(error);
-        markExhausted(
-          candidate.registryKey,
-          candidate.info.rateLimitHints,
-          parsed.retryAfterMs,
-          'generate:429',
-          parsed.dailyQuotaExhausted,
-        );
+  const startTier = preferredCandidate?.info.speedTier ?? requestedTier;
+  const skipRegistryKey = preferredCandidate?.registryKey;
+
+  for (const { candidates: tierCandidates } of iterateSpeedTierBatchesForFailover(
+    options,
+    candidateOptions,
+    startTier,
+    skipRegistryKey,
+    exhaustionCtx,
+  )) {
+    allCandidatesForError.push(...tierCandidates);
+
+    const reachableKeys = await pingAllModels(
+      tierCandidates.map((candidate) => ({
+        apiModelId: candidate.apiModelId,
+        registryKey: candidate.registryKey,
+        rateLimitHints: candidate.info.rateLimitHints,
+        provider: candidate.info.provider,
+      })),
+      exhaustionCtx,
+    );
+
+    for (const key of reachableKeys) {
+      allReachableKeys.add(key);
+    }
+
+    const reachable = tierCandidates.filter((candidate) =>
+      reachableKeys.has(candidate.registryKey),
+    );
+
+    if (reachable.length === 0) {
+      continue;
+    }
+
+    for (const candidate of reachable) {
+      modelsAttempted.push(candidate.registryKey);
+
+      const thinkingPower = candidate.info.bakedThinkingPower;
+
+      let requestConfig: BuiltRequestConfig;
+
+      try {
+        requestConfig = buildRequestConfig(options, candidate, thinkingPower);
+      } catch (error) {
+        lastError = error;
         continue;
       }
 
-      throw error;
-    }
+      try {
+        return await executeResolvedCall(
+          candidate,
+          options,
+          requestConfig,
+          {
+            requestedTier,
+            modelsAttempted,
+            modelSelectedBy: usedPreferredFailover ? 'preferred_failover' : 'tier',
+          },
+          exhaustionCtx,
+        );
+      } catch (error) {
+        lastError = error;
 
+        if (error instanceof LlmCapabilityError) {
+          throw error;
+        }
+
+        if (isRecoverableLlmFailure(error)) {
+          handleRecoverableFailure(candidate, error, exhaustionCtx);
+          continue;
+        }
+
+        throw error;
+      }
+    }
   }
 
-
+  if (modelsAttempted.length === 0 && allCandidatesForError.length > 0) {
+    throw buildNoReachableModelsError(
+      {
+        explicitModel: Boolean(preferredCandidate),
+        requestedTier,
+        allCandidates: allCandidatesForError,
+        reachableKeys: allReachableKeys,
+      },
+      exhaustionCtx,
+    );
+  }
 
   if (lastError instanceof GeminiQuotaError) {
 
@@ -713,25 +730,34 @@ export async function callLlm(options: CallLlmOptions): Promise<CallLlmResult> {
 
 
   if (lastError instanceof Error) {
-
-    throw new GeminiQuotaError(
-
-      `All models exhausted for tier "${requestedTier}". Attempted: ${modelsAttempted.join(', ') || 'none'}. ${lastError.message}`,
-
-      modelsAttempted.at(-1) ?? requestedTier,
-
+    const exhaustedError = buildNoReachableModelsError(
+      {
+        explicitModel: Boolean(preferredCandidate),
+        requestedTier,
+        allCandidates: allCandidatesForError,
+        reachableKeys: allReachableKeys,
+      },
+      exhaustionCtx,
     );
-
+    throw new GeminiQuotaError(
+      `All models exhausted for tier "${requestedTier}". Attempted: ${modelsAttempted.join(', ') || 'none'}. ${lastError.message}`,
+      modelsAttempted.at(-1) ?? requestedTier,
+      {
+        failureKind: exhaustedError.failureKind,
+        blockedModels: exhaustedError.blockedModels,
+        retryAfterMs: exhaustedError.retryAfterMs,
+      },
+    );
   }
 
-
-
-  throw new GeminiQuotaError(
-
-    `All models exhausted for tier "${requestedTier}". Attempted: ${modelsAttempted.join(', ') || 'none'}.`,
-
-    modelsAttempted.at(-1) ?? requestedTier,
-
+  throw buildNoReachableModelsError(
+    {
+      explicitModel: Boolean(preferredCandidate),
+      requestedTier,
+      allCandidates: allCandidatesForError,
+      reachableKeys: allReachableKeys,
+    },
+    exhaustionCtx,
   );
 
 }
@@ -748,25 +774,29 @@ export function resolveCallModel(options: CallLlmOptions): string {
 
   }
 
+  if (!options.speedTier) {
+
+    return getDefaultModelId();
+
+  }
 
 
-  const candidates = collectModelCandidates(options, {
+
+  const tier = resolveRequestedSpeedTier(options);
+  const candidates = iterateSpeedTierBatchesForFailover(options, {
     requireFunctionCalling: Boolean(options.tools?.length),
     requireStructuredOutput: Boolean(options.structuredOutput),
-  });
+  }, tier).next().value?.candidates ?? [];
 
   if (candidates.length > 0) {
     return candidates[0].registryKey;
   }
 
-
-
   return getDefaultModelId();
-
 }
 
 
 
-export type { CallLlmOptions, CallLlmResult, ChatMessage, LlmContentBlock, LlmFunctionCall };
+export type { CallLlmOptions, CallLlmResult, ChatMessage, LlmFunctionCall };
 
 

@@ -1,32 +1,39 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { markExhausted, resetExhaustionState } from '../../server/gemini/availability.js';
 import {
-  getTierDowngradeChain,
-  isTierDowngraded,
+  getSpeedTierDowngradeChain,
+  isSpeedTierDowngraded,
   iterateModelCandidates,
+  iterateSpeedTierBatches,
 } from '../../server/gemini/model-selection.js';
+import { SPEED_TIER_MODEL_ORDER, TEXT_MODEL_REGISTRY } from '../../server/gemini/models.js';
 
-describe('getTierDowngradeChain', () => {
-  it('returns high, medium, low from high', () => {
-    expect(getTierDowngradeChain('high')).toEqual(['high', 'medium', 'low']);
+describe('getSpeedTierDowngradeChain', () => {
+  it('returns all tiers from instant', () => {
+    expect(getSpeedTierDowngradeChain('instant')).toEqual([
+      'instant',
+      'fast',
+      'moderate',
+      'slow',
+    ]);
   });
 
-  it('returns medium, low from medium', () => {
-    expect(getTierDowngradeChain('medium')).toEqual(['medium', 'low']);
+  it('returns moderate and slow from moderate', () => {
+    expect(getSpeedTierDowngradeChain('moderate')).toEqual(['moderate', 'slow']);
   });
 
-  it('returns low only from low', () => {
-    expect(getTierDowngradeChain('low')).toEqual(['low']);
+  it('returns slow only from slow', () => {
+    expect(getSpeedTierDowngradeChain('slow')).toEqual(['slow']);
   });
 });
 
-describe('isTierDowngraded', () => {
-  it('detects downgrade from medium to low', () => {
-    expect(isTierDowngraded('medium', 'low')).toBe(true);
+describe('isSpeedTierDowngraded', () => {
+  it('detects downgrade from moderate to slow', () => {
+    expect(isSpeedTierDowngraded('moderate', 'slow')).toBe(true);
   });
 
   it('returns false when tier unchanged', () => {
-    expect(isTierDowngraded('low', 'low')).toBe(false);
+    expect(isSpeedTierDowngraded('instant', 'instant')).toBe(false);
   });
 });
 
@@ -35,66 +42,78 @@ describe('iterateModelCandidates', () => {
     resetExhaustionState();
   });
 
-  it('yields strongest first within low tier', () => {
-    const ids = [...iterateModelCandidates({ thinkingPowerTier: 'low' })].map(
+  it('yields strongest first within instant tier', () => {
+    const ids = [...iterateModelCandidates({ speedTier: 'instant' })].map(
       (c) => c.registryKey,
     );
-    expect(ids.slice(0, 3)).toEqual([
-      'gemini-3.1-flash-lite',
-      'gemini-2.5-flash-lite',
-      'gemini-2.0-flash-lite',
-    ]);
+    expect(ids.slice(0, 3)).toEqual(SPEED_TIER_MODEL_ORDER.instant.slice(0, 3));
   });
 
   it('yields explicit model only once', () => {
-    const candidates = [...iterateModelCandidates({ model: 'gemini-2.0-flash' })];
+    const candidates = [...iterateModelCandidates({ model: 'gemini-2.5-flash' })];
     expect(candidates).toHaveLength(1);
-    expect(candidates[0].registryKey).toBe('gemini-2.0-flash');
+    expect(candidates[0].registryKey).toBe('gemini-2.5-flash-medium');
   });
 
   it('skips exhausted models', () => {
-    markExhausted('gemini-3.1-flash-lite');
-    const ids = [...iterateModelCandidates({ thinkingPowerTier: 'low' })].map(
+    const firstInstant = SPEED_TIER_MODEL_ORDER.instant[0];
+    markExhausted(firstInstant);
+    const ids = [...iterateModelCandidates({ speedTier: 'instant' })].map(
       (c) => c.registryKey,
     );
-    expect(ids[0]).toBe('gemini-2.5-flash-lite');
-    expect(ids).not.toContain('gemini-3.1-flash-lite');
+    expect(ids[0]).toBe(SPEED_TIER_MODEL_ORDER.instant[1]);
+    expect(ids).not.toContain(firstInstant);
   });
 
   it('filters to structured-output models when schema required', () => {
     const ids = [
       ...iterateModelCandidates(
         {
-          thinkingPowerTier: 'low',
+          speedTier: 'instant',
           structuredOutput: { responseJsonSchema: { type: 'object' } },
         },
         { requireStructuredOutput: true },
       ),
     ].map((c) => c.registryKey);
 
-    expect(ids).toEqual(['gemini-3.1-flash-lite']);
+    expect(ids).toContain('gemini-3.1-flash-lite-minimal');
+    expect(ids.every((id) => TEXT_MODEL_REGISTRY[id].supportsStructuredOutput)).toBe(true);
   });
 
-  it('includes medium models after high tier when starting at high', () => {
-    markExhausted('gemini-3.1-pro');
-    markExhausted('gemini-2.5-pro');
+  it('includes slower tiers after slow tier candidates when starting at slow', () => {
+    for (const id of SPEED_TIER_MODEL_ORDER.slow) {
+      markExhausted(id);
+    }
 
-    const ids = [...iterateModelCandidates({ thinkingPowerTier: 'high' })].map(
-      (c) => c.registryKey,
-    );
-
-    expect(ids[0]).toBe('gemini-3.5-flash');
-    expect(ids).toContain('gemini-3.1-flash-lite');
+    const ids = [...iterateModelCandidates({ speedTier: 'slow' })].map((c) => c.registryKey);
+    expect(ids).toHaveLength(0);
   });
 
   it('skips models without function calling when tools required', () => {
     const candidates = [
       ...iterateModelCandidates(
-        { thinkingPowerTier: 'low', tools: [{ name: 'fn', description: 'd' }] },
+        { speedTier: 'instant', tools: [{ name: 'fn', description: 'd' }] },
         { requireFunctionCalling: true },
       ),
     ];
     expect(candidates.length).toBeGreaterThan(0);
     expect(candidates.every((c) => c.info.supportsFunctionCalling)).toBe(true);
+  });
+});
+
+describe('iterateSpeedTierBatches', () => {
+  beforeEach(() => {
+    resetExhaustionState();
+  });
+
+  it('yields moderate then slow batches only when starting at moderate', () => {
+    const batches = [...iterateSpeedTierBatches({ speedTier: 'moderate' })];
+    expect(batches.map((batch) => batch.tier)).toEqual(['moderate', 'slow']);
+    expect(batches[0].candidates.every((c) => c.info.speedTier === 'moderate')).toBe(true);
+    expect(batches[1].candidates.every((c) => c.info.speedTier === 'slow')).toBe(true);
+  });
+
+  it('yields nothing for explicit model', () => {
+    expect([...iterateSpeedTierBatches({ model: 'gemini-3-flash' })]).toHaveLength(0);
   });
 });

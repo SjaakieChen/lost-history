@@ -53,7 +53,7 @@ describe('withRateLimitAndRetry', () => {
 
     await vi.runAllTimersAsync();
     await expectation;
-    expect(operation).toHaveBeenCalledTimes(4);
+    expect(operation).toHaveBeenCalledTimes(2);
 
     vi.useRealTimers();
   });

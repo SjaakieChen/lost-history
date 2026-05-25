@@ -7,7 +7,8 @@ import {
   GeminiQuotaError,
   LlmCapabilityError,
 } from './gemini.js';
-import type { CallLlmOptions, GenerateTextOptions } from '../shared/gemini-types.js';
+import type { CallLlmOptions } from '../shared/gemini-types.js';
+import type { GenerateTextOptions } from './gemini/generate-text.js';
 
 export function createApp() {
   const app = express();
@@ -27,13 +28,15 @@ export function createApp() {
     try {
       const body = req.body as CallLlmOptions;
 
-      if (!body.contents?.length && !body.prompt?.trim() && !body.messages?.length) {
-        res.status(400).json({ error: 'contents, prompt, or messages are required.' });
+      if (!body.prompt?.trim() && !body.messages?.length) {
+        res.status(400).json({ error: 'prompt or messages are required.' });
         return;
       }
 
       const result = await callLlm(body);
-      res.json(result);
+      const { threadState: _threadState, ...publicResult } =
+        result as typeof result & { threadState?: unknown };
+      res.json(publicResult);
     } catch (error) {
       if (error instanceof LlmCapabilityError) {
         res.status(400).json({
@@ -45,7 +48,19 @@ export function createApp() {
       }
 
       if (error instanceof GeminiQuotaError) {
-        res.status(429).json({ error: error.message, model: error.model });
+        const retryAfterSec = error.retryAfterMs
+          ? Math.ceil(error.retryAfterMs / 1000)
+          : undefined;
+        res.status(429).json({
+          error: error.message,
+          model: error.model,
+          registryKey: error.model,
+          failureKind: error.failureKind,
+          blockedModels: error.blockedModels,
+          ...(retryAfterSec !== undefined
+            ? { retryAfterSec, retryAfterMs: error.retryAfterMs }
+            : {}),
+        });
         return;
       }
 
@@ -68,19 +83,24 @@ export function createApp() {
         prompt: body.prompt?.trim(),
         messages: body.messages,
         systemInstruction: body.systemInstruction,
-        temperature: body.temperature,
         maxOutputTokens: body.maxOutputTokens,
-        thinking: body.thinking,
-        thinkingBudget: body.thinkingBudget,
         includeThoughts: body.includeThoughts,
-        thinkingPower: body.thinkingPower,
-        thinkingPowerTier: body.thinkingPowerTier,
+        speedTier: body.speedTier,
       });
 
       res.json(result);
     } catch (error) {
       if (error instanceof GeminiQuotaError) {
-        res.status(429).json({ error: error.message, model: error.model });
+        const retryAfterSec = error.retryAfterMs
+          ? Math.ceil(error.retryAfterMs / 1000)
+          : undefined;
+        res.status(429).json({
+          error: error.message,
+          model: error.model,
+          ...(retryAfterSec !== undefined
+            ? { retryAfterSec, retryAfterMs: error.retryAfterMs }
+            : {}),
+        });
         return;
       }
 

@@ -49,10 +49,17 @@ describe('buildThinkingConfig', () => {
   });
 
   describe('thinkingMode levels (Gemini 3+)', () => {
-    it('maps low to MINIMAL level', () => {
-      expect(buildThinkingConfig('levels', 'low')).toEqual({
+    it('maps minimal to MINIMAL level', () => {
+      expect(buildThinkingConfig('levels', 'minimal')).toEqual({
         includeThoughts: true,
         thinkingLevel: ThinkingLevel.MINIMAL,
+      });
+    });
+
+    it('maps low to LOW level', () => {
+      expect(buildThinkingConfig('levels', 'low')).toEqual({
+        includeThoughts: true,
+        thinkingLevel: ThinkingLevel.LOW,
       });
     });
 

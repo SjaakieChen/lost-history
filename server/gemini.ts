@@ -1,21 +1,22 @@
-export {
-  callLlm,
-  buildFunctionResponseContent,
-  generateText,
-  generateTextFromPrompt,
-  getDefaultModelId,
-  listTextModels,
-  getModelsByTier,
-  resolveModelForTier,
-  GeminiQuotaError,
-  LlmCapabilityError,
-} from './gemini/index.js';
-
-export type {
-  CallLlmOptions,
-  CallLlmResult,
-  GenerateTextOptions,
-  GenerateTextResult,
-  LlmContentBlock,
-  LlmFunctionCall,
-} from './gemini/index.js';
+export {
+  callLlm,
+  generateText,
+  generateTextFromPrompt,
+  getDefaultModelId,
+  listTextModels,
+  getModelsBySpeedTier,
+  resolveModelForSpeedTier,
+  GeminiQuotaError,
+  LlmCapabilityError,
+} from './gemini/index.js';
+
+export { LlmSession } from './llm/session.js';
+
+export type {
+  CallLlmOptions,
+  CallLlmResult,
+  GenerateTextOptions,
+  GenerateTextResult,
+  LlmFunctionCall,
+} from './gemini/index.js';
+export type { ExportMessagesOptions, LlmSessionOptions } from '../shared/gemini-types.js';

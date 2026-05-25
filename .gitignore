@@ -24,3 +24,11 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+
+# Local speed calibration (commit speed-benchmark.md if you want to share results)
+calibration/speed-benchmark.json
+calibration/speed-tier-assignments.json
+
+#cursor
+.cursorrules
+.cursor/

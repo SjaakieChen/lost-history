@@ -1,27 +1,23 @@
-import type { CallLlmOptions, ThinkingPowerTier } from '../../shared/gemini-types.js';
-import { isExhausted } from './availability.js';
+import type { CallLlmOptions, SpeedTier } from '../../shared/gemini-types.js';
+import { type ExhaustionContext, isExhausted } from './availability.js';
 import {
-  getDefaultTier,
-  getModelsByTier,
+  getDefaultSpeedTier,
+  getModelsBySpeedTier,
   resolveTextModel,
   type ResolvedTextModel,
 } from './models.js';
+import {
+  getSpeedTierDowngradeChain,
+  isSpeedTierDowngraded,
+} from './speed-tier-classify.js';
 
-const TIER_ORDER: ThinkingPowerTier[] = ['high', 'medium', 'low'];
+export { getSpeedTierDowngradeChain, isSpeedTierDowngraded };
 
-export function getTierDowngradeChain(start: ThinkingPowerTier): ThinkingPowerTier[] {
-  const startIndex = TIER_ORDER.indexOf(start);
-  if (startIndex === -1) {
-    return [start];
-  }
-  return TIER_ORDER.slice(startIndex);
+export function resolveRequestedSpeedTier(options: CallLlmOptions): SpeedTier {
+  return options.speedTier ?? getDefaultSpeedTier();
 }
 
-export function resolveRequestedTier(options: CallLlmOptions): ThinkingPowerTier {
-  return options.thinkingPowerTier ?? getDefaultTier();
-}
-
-function toResolved(model: ResolvedTextModel['info'], tier: ThinkingPowerTier): ResolvedTextModel {
+function toResolved(model: ResolvedTextModel['info'], tier: SpeedTier): ResolvedTextModel {
   return {
     registryKey: model.id,
     apiModelId: model.apiModelId,
@@ -36,6 +32,49 @@ export interface ModelCandidateOptions {
   preferFreeTier?: boolean;
 }
 
+export function collectCandidatesForSpeedTier(
+  tier: SpeedTier,
+  options: CallLlmOptions,
+  candidateOptions?: ModelCandidateOptions,
+  exhaustionCtx?: ExhaustionContext,
+): ResolvedTextModel[] {
+  const filterOptions = {
+    preferFreeTier: candidateOptions?.preferFreeTier ?? true,
+    requireFunctionCalling: candidateOptions?.requireFunctionCalling,
+    requireStructuredOutput: candidateOptions?.requireStructuredOutput,
+  };
+
+  const models = getModelsBySpeedTier(tier, filterOptions);
+  const candidates: ResolvedTextModel[] = [];
+
+  for (const model of models) {
+    if (isExhausted(model.id, Date.now(), exhaustionCtx)) {
+      continue;
+    }
+    candidates.push(toResolved(model, tier));
+  }
+
+  return candidates;
+}
+
+export function* iterateSpeedTierBatches(
+  options: CallLlmOptions,
+  candidateOptions?: ModelCandidateOptions,
+): Generator<{ tier: SpeedTier; candidates: ResolvedTextModel[] }> {
+  if (options.model?.trim()) {
+    return;
+  }
+
+  const tierChain = getSpeedTierDowngradeChain(resolveRequestedSpeedTier(options));
+
+  for (const tier of tierChain) {
+    const candidates = collectCandidatesForSpeedTier(tier, options, candidateOptions);
+    if (candidates.length > 0) {
+      yield { tier, candidates };
+    }
+  }
+}
+
 export function* iterateModelCandidates(
   options: CallLlmOptions,
   candidateOptions?: ModelCandidateOptions,
@@ -45,23 +84,13 @@ export function* iterateModelCandidates(
     return;
   }
 
-  const requestedTier = resolveRequestedTier(options);
-  const tierChain = getTierDowngradeChain(requestedTier);
-
-  const filterOptions = {
-    preferFreeTier: candidateOptions?.preferFreeTier ?? true,
-    requireFunctionCalling: candidateOptions?.requireFunctionCalling,
-    requireStructuredOutput: candidateOptions?.requireStructuredOutput,
-  };
+  const requestedTier = resolveRequestedSpeedTier(options);
+  const tierChain = getSpeedTierDowngradeChain(requestedTier);
 
   for (const tier of tierChain) {
-    const models = getModelsByTier(tier, filterOptions);
-
-    for (const model of models) {
-      if (isExhausted(model.id)) {
-        continue;
-      }
-      yield toResolved(model, tier);
+    const candidates = collectCandidatesForSpeedTier(tier, options, candidateOptions);
+    for (const candidate of candidates) {
+      yield candidate;
     }
   }
 }
@@ -73,11 +102,25 @@ export function collectModelCandidates(
   return [...iterateModelCandidates(options, candidateOptions)];
 }
 
-export function isTierDowngraded(
-  requested: ThinkingPowerTier,
-  used: ThinkingPowerTier,
-): boolean {
-  const requestedIndex = TIER_ORDER.indexOf(requested);
-  const usedIndex = TIER_ORDER.indexOf(used);
-  return usedIndex > requestedIndex;
+/** Tier batches for failover; optional skip and custom start tier (e.g. preferred model's tier). */
+export function* iterateSpeedTierBatchesForFailover(
+  options: CallLlmOptions,
+  candidateOptions: ModelCandidateOptions | undefined,
+  startTier: SpeedTier,
+  skipRegistryKey?: string,
+  exhaustionCtx?: ExhaustionContext,
+): Generator<{ tier: SpeedTier; candidates: ResolvedTextModel[] }> {
+  const tierChain = getSpeedTierDowngradeChain(startTier);
+
+  for (const tier of tierChain) {
+    const candidates = collectCandidatesForSpeedTier(
+      tier,
+      options,
+      candidateOptions,
+      exhaustionCtx,
+    ).filter((candidate) => candidate.registryKey !== skipRegistryKey);
+    if (candidates.length > 0) {
+      yield { tier, candidates };
+    }
+  }
 }

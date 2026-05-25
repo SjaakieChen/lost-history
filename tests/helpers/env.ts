@@ -1,5 +1,10 @@
-import { getApiKey } from '../../server/config.js';
+import { getApiKey, getGroqApiKey } from '../../server/config.js';
 
 export function hasLiveApiKey(): boolean {
   return Boolean(getApiKey());
+}
+
+/** Live tests need both providers for speed-tier routing (Gemini + Groq). */
+export function hasLiveTestKeys(): boolean {
+  return Boolean(getApiKey() && getGroqApiKey());
 }

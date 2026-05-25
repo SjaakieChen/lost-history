@@ -1,9 +1,10 @@
 import type { ModelRateLimitHints } from '../../shared/gemini-types.js';
-import { markExhausted } from './availability.js';
+import { type ExhaustionContext, markExhausted } from './availability.js';
 
 const lastRequestAt = new Map<string, number>();
 
-const MAX_RETRIES = 3;
+/** One retry on the same model after a quota/rate-limit failure, then exhaust and failover. */
+const MAX_RETRIES = 1;
 const BASE_BACKOFF_MS = 2_000;
 
 function sleep(ms: number): Promise<void> {
@@ -28,9 +29,6 @@ async function waitForLocalRateLimit(modelKey: string, hints?: ModelRateLimitHin
   const elapsed = Date.now() - last;
   if (elapsed < interval) {
     const waitMs = interval - elapsed;
-    // #region agent log
-    fetch('http://127.0.0.1:7631/ingest/130840d0-116a-49e4-9207-dfd55fe50a73',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ae9da3'},body:JSON.stringify({sessionId:'ae9da3',hypothesisId:'H5',location:'rate-limit.ts:waitForLocalRateLimit',message:'generate RPM throttle wait',data:{modelKey,waitMs,interval},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     await sleep(waitMs);
   }
 
@@ -132,6 +130,7 @@ export function formatQuotaError(
   model: string,
   cause: unknown,
   hints?: ModelRateLimitHints,
+  exhaustionCtx?: ExhaustionContext,
 ): GeminiQuotaError {
   const detail = cause instanceof Error ? cause.message : String(cause);
   const parsed = parseQuotaErrorDetails(cause);
@@ -143,6 +142,7 @@ export function formatQuotaError(
     parsed.retryAfterMs,
     'formatQuotaError',
     parsed.dailyQuotaExhausted,
+    exhaustionCtx,
   );
 
   const retryHint = parsed.retryAfterMs
@@ -165,6 +165,7 @@ export async function withRateLimitAndRetry<T>(
   modelKey: string,
   hints: ModelRateLimitHints | undefined,
   operation: () => Promise<T>,
+  exhaustionCtx?: ExhaustionContext,
 ): Promise<T> {
   let lastError: unknown;
 
@@ -189,22 +190,15 @@ export async function withRateLimitAndRetry<T>(
           parsed.retryAfterMs,
           'withRateLimitAndRetry:final',
           parsed.dailyQuotaExhausted,
+          exhaustionCtx,
         );
-        throw formatQuotaError(modelKey, error, hints);
+        throw formatQuotaError(modelKey, error, hints, exhaustionCtx);
       }
-
-      markExhausted(
-        modelKey,
-        hints,
-        parsed.retryAfterMs,
-        'withRateLimitAndRetry:retry',
-        parsed.dailyQuotaExhausted,
-      );
 
       const backoff = Math.max(BASE_BACKOFF_MS * 2 ** attempt, parsed.retryAfterMs ?? 0);
       await sleep(backoff);
     }
   }
 
-  throw formatQuotaError(modelKey, lastError, hints);
+  throw formatQuotaError(modelKey, lastError, hints, exhaustionCtx);
 }

@@ -35,8 +35,11 @@ export function buildThinkingConfig(
 
   if (thinkingMode === 'levels') {
     switch (thinkingPower) {
-      case 'low':
+      case 'minimal':
         config.thinkingLevel = ThinkingLevel.MINIMAL;
+        break;
+      case 'low':
+        config.thinkingLevel = ThinkingLevel.LOW;
         break;
       case 'medium':
         config.thinkingLevel = ThinkingLevel.MEDIUM;

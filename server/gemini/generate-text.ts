@@ -1,45 +1,20 @@
-import type {
-  GenerateTextOptions,
-  GenerateTextResult,
-  ThinkingPower,
-} from '../../shared/gemini-types.js';
+import type { CallLlmOptions, GenerateTextResult } from '../../shared/gemini-types.js';
 import { callLlm } from './call-llm.js';
 import { getDefaultModelId } from './models.js';
 
-function mapLegacyThinkingPower(options: GenerateTextOptions): ThinkingPower {
-  if (options.thinkingPower) {
-    return options.thinkingPower;
-  }
-
-  if (options.thinkingBudget !== undefined) {
-    if (options.thinkingBudget === 0) {
-      return 'off';
-    }
-    if (options.thinkingBudget <= 1024) {
-      return 'low';
-    }
-    if (options.thinkingBudget === -1) {
-      return 'medium';
-    }
-    return 'high';
-  }
-
-  if (options.thinking === true || options.includeThoughts === true) {
-    return 'medium';
-  }
-
-  return 'off';
-}
+/** Text-only chat options (subset of CallLlmOptions). */
+export type GenerateTextOptions = Pick<
+  CallLlmOptions,
+  'model' | 'prompt' | 'messages' | 'systemInstruction' | 'maxOutputTokens' | 'includeThoughts' | 'speedTier'
+>;
 
 export async function generateText(options: GenerateTextOptions): Promise<GenerateTextResult> {
   const result = await callLlm({
     model: options.model?.trim() || getDefaultModelId(),
-    thinkingPowerTier: options.thinkingPowerTier,
-    thinkingPower: mapLegacyThinkingPower(options),
+    speedTier: options.speedTier,
     prompt: options.prompt,
     messages: options.messages,
     systemInstruction: options.systemInstruction,
-    temperature: options.temperature,
     maxOutputTokens: options.maxOutputTokens,
     includeThoughts: options.includeThoughts,
   });
@@ -62,4 +37,4 @@ export async function generateTextFromPrompt(
   return result.text;
 }
 
-export type { ChatMessage, GenerateTextOptions, GenerateTextResult } from '../../shared/gemini-types.js';
+export type { ChatMessage, GenerateTextResult } from '../../shared/gemini-types.js';

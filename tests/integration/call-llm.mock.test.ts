@@ -1,14 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { markExhausted, resetExhaustionState } from '../../server/gemini/availability.js';
-import { buildFunctionResponseContent, callLlm } from '../../server/gemini/call-llm.js';
+import { callLlm } from '../../server/gemini/call-llm.js';
+import { buildGeminiFunctionResponseContent } from '../../server/llm/conversation/gemini-thread.js';
 import { GeminiQuotaError } from '../../server/gemini/rate-limit.js';
 import { getGenAIClient } from '../../server/gemini/client.js';
+import { iterateSpeedTierBatches } from '../../server/gemini/model-selection.js';
+import { SPEED_TIER_MODEL_ORDER, TEXT_MODEL_REGISTRY } from '../../server/gemini/models.js';
 import {
   createFunctionCallResponse,
   createTextResponse,
   createThoughtResponse,
   quotaError,
 } from '../helpers/mock-genai.js';
+
+vi.mock('../../server/config.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../server/config.js')>();
+  return {
+    ...actual,
+    getGroqApiKey: vi.fn(() => undefined),
+  };
+});
 
 vi.mock('../../server/gemini/rate-limit.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../server/gemini/rate-limit.js')>();
@@ -28,9 +39,22 @@ function installClient(get: ReturnType<typeof vi.fn>, generateContent: ReturnTyp
   } as never);
 }
 
-describe('buildFunctionResponseContent', () => {
+function geminiInstantKeys(): string[] {
+  return SPEED_TIER_MODEL_ORDER.instant.filter(
+    (id) => (TEXT_MODEL_REGISTRY[id].provider ?? 'gemini') === 'gemini',
+  );
+}
+
+function geminiInstantPingCount(): number {
+  const batches = [...iterateSpeedTierBatches({ speedTier: 'instant' })];
+  return (
+    batches[0]?.candidates.filter((candidate) => candidate.info.provider !== 'groq').length ?? 0
+  );
+}
+
+describe('buildGeminiFunctionResponseContent', () => {
   it('builds user role content with functionResponse', () => {
-    const block = buildFunctionResponseContent('get_answer', { value: 42 });
+    const block = buildGeminiFunctionResponseContent('get_answer', { value: 42 });
 
     expect(block).toEqual({
       role: 'user',
@@ -39,7 +63,7 @@ describe('buildFunctionResponseContent', () => {
   });
 
   it('includes function call id when provided', () => {
-    const block = buildFunctionResponseContent('get_answer', { value: 42 }, 'fc-99');
+    const block = buildGeminiFunctionResponseContent('get_answer', { value: 42 }, 'fc-99');
 
     expect(block.parts?.[0]).toEqual({
       functionResponse: { name: 'get_answer', response: { value: 42 }, id: 'fc-99' },
@@ -61,31 +85,33 @@ describe('callLlm with mocked GenAI client', () => {
     const result = await callLlm({
       model: 'gemini-2.5-flash-lite',
       prompt: 'Say hello',
-      thinkingPower: 'off',
     });
 
     expect(result.text).toBe('Hello world');
     expect(result.modelSelectedBy).toBe('explicit');
-    expect(result.modelsAttempted).toEqual(['gemini-2.5-flash-lite']);
-    expect(get).toHaveBeenCalledOnce();
-    expect(get).toHaveBeenCalledBefore(generateContent);
+    expect(result.modelsAttempted).toEqual(['gemini-2.5-flash-lite-medium']);
+    expect(result.thinkingPowerApplied).toBe('medium');
+    expect(get).not.toHaveBeenCalled();
+    expect(generateContent).toHaveBeenCalledOnce();
   });
 
-  it('auto-selects strongest low-tier model by default', async () => {
+  it('auto-selects strongest instant-tier model by default', async () => {
     const get = vi.fn().mockResolvedValue({});
+    const firstInstant = geminiInstantKeys()[0];
+    const apiModelId = TEXT_MODEL_REGISTRY[firstInstant].apiModelId;
     const generateContent = vi.fn().mockResolvedValue(
-      createTextResponse('Hello', { modelVersion: 'models/gemini-3.1-flash-lite' }),
+      createTextResponse('Hello', { modelVersion: `models/${apiModelId}` }),
     );
     installClient(get, generateContent);
 
-    const result = await callLlm({ prompt: 'Hi', thinkingPowerTier: 'low' });
+    const result = await callLlm({ prompt: 'Hi', speedTier: 'instant' });
 
     expect(generateContent).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'gemini-3.1-flash-lite' }),
+      expect.objectContaining({ model: apiModelId }),
     );
     expect(result.modelSelectedBy).toBe('tier');
-    expect(result.thinkingPowerTierUsed).toBe('low');
-    expect(get).toHaveBeenCalledTimes(3);
+    expect(result.speedTierUsed).toBe('instant');
+    expect(get).toHaveBeenCalledTimes(geminiInstantPingCount());
   });
 
   it('parses thoughts and function calls from response parts', async () => {
@@ -96,14 +122,14 @@ describe('callLlm with mocked GenAI client', () => {
     );
 
     const thoughtResult = await callLlm({
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-2.5-flash-lite-low',
       prompt: 'Think then answer',
-      thinkingPower: 'low',
     });
 
     expect(thoughtResult.thoughts).toBe('Let me think...');
     expect(thoughtResult.text).toBe('Final answer');
     expect(thoughtResult.thinkingUsed).toBe(true);
+    expect(thoughtResult.thinkingPowerApplied).toBe('low');
 
     installClient(
       get,
@@ -122,8 +148,13 @@ describe('callLlm with mocked GenAI client', () => {
   });
 
   it('skips model when ping returns 429 and tries next in tier', async () => {
+    const firstInstant = geminiInstantKeys()[0];
+    const secondInstant = geminiInstantKeys()[1];
+    const firstApi = TEXT_MODEL_REGISTRY[firstInstant].apiModelId;
+    const secondApi = TEXT_MODEL_REGISTRY[secondInstant].apiModelId;
+
     const get = vi.fn().mockImplementation(({ model }: { model: string }) => {
-      if (model === 'gemini-3.1-flash-lite') {
+      if (model === firstApi) {
         return Promise.reject(quotaError());
       }
       return Promise.resolve({});
@@ -131,14 +162,14 @@ describe('callLlm with mocked GenAI client', () => {
     const generateContent = vi.fn().mockResolvedValue(createTextResponse('fallback'));
     installClient(get, generateContent);
 
-    const result = await callLlm({ thinkingPowerTier: 'low', prompt: 'Hi' });
+    const result = await callLlm({ speedTier: 'instant', prompt: 'Hi' });
 
-    expect(get).toHaveBeenCalledTimes(3);
     expect(result.text).toBe('fallback');
-    expect(result.modelsAttempted).toEqual(['gemini-2.5-flash-lite']);
+    expect(result.modelsAttempted).toEqual([secondInstant]);
     expect(generateContent).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'gemini-2.5-flash-lite' }),
+      expect.objectContaining({ model: secondApi }),
     );
+    expect(get).toHaveBeenCalledTimes(geminiInstantPingCount());
   });
 
   it('failovers within tier when generateContent returns 429', async () => {
@@ -149,78 +180,61 @@ describe('callLlm with mocked GenAI client', () => {
       .mockResolvedValueOnce(createTextResponse('second model'));
     installClient(get, generateContent);
 
-    const result = await callLlm({ thinkingPowerTier: 'low', prompt: 'Hi' });
+    const result = await callLlm({ speedTier: 'instant', prompt: 'Hi' });
 
     expect(result.text).toBe('second model');
     expect(result.modelsAttempted?.length).toBe(2);
     expect(generateContent).toHaveBeenCalledTimes(2);
   });
 
-  it('downgrades tier when all medium models fail', async () => {
+  it('downgrades speed tier when all moderate models fail', async () => {
+    const tierBatches = [...iterateSpeedTierBatches({ speedTier: 'moderate' })];
+    const moderateCandidates = tierBatches[0].candidates;
+    const slowCandidates = tierBatches[1].candidates;
+
     const get = vi.fn().mockResolvedValue({});
-    const generateContent = vi
-      .fn()
-      .mockRejectedValueOnce(quotaError())
-      .mockRejectedValueOnce(quotaError())
-      .mockRejectedValueOnce(quotaError())
-      .mockRejectedValueOnce(quotaError())
-      .mockResolvedValueOnce(createTextResponse('low tier win'));
+    const generateContent = vi.fn();
+    for (let i = 0; i < moderateCandidates.length; i += 1) {
+      generateContent.mockRejectedValueOnce(quotaError());
+    }
+    generateContent.mockResolvedValueOnce(createTextResponse('slow tier win'));
 
     installClient(get, generateContent);
 
-    const result = await callLlm({ thinkingPowerTier: 'medium', prompt: 'Hi' });
+    const result = await callLlm({ speedTier: 'moderate', prompt: 'Hi' });
 
-    expect(result.text).toBe('low tier win');
-    expect(result.tierDowngraded).toBe(true);
-    expect(result.thinkingPowerTierRequested).toBe('medium');
-    expect(result.thinkingPowerTierUsed).toBe('low');
+    expect(result.text).toBe('slow tier win');
+    expect(result.speedTierDowngraded).toBe(true);
+    expect(result.speedTierRequested).toBe('moderate');
+    expect(result.speedTierUsed).toBe('slow');
+    expect(get).toHaveBeenCalledTimes(moderateCandidates.length + slowCandidates.length);
+    expect(get.mock.calls.length).toBeGreaterThan(moderateCandidates.length);
   });
 
   it('throws when all tiers exhausted', async () => {
-    markExhausted('gemini-3.1-flash-lite');
-    markExhausted('gemini-2.5-flash-lite');
-    markExhausted('gemini-2.0-flash-lite');
-    markExhausted('gemini-3.5-flash');
-    markExhausted('gemini-3-flash');
-    markExhausted('gemini-2.5-flash');
-    markExhausted('gemini-2.0-flash');
+    const get = vi.fn().mockRejectedValue({ status: 429, message: 'rate limit' });
+    const generateContent = vi.fn().mockRejectedValue(quotaError());
+    installClient(get, generateContent);
 
-    await expect(callLlm({ thinkingPowerTier: 'medium', prompt: 'Hi' })).rejects.toBeInstanceOf(
+    await expect(callLlm({ speedTier: 'moderate', prompt: 'Hi' })).rejects.toBeInstanceOf(
       GeminiQuotaError,
     );
   });
 
-  it('explicit model does not failover on quota error', async () => {
+
+  it('structured output uses capable registry model', async () => {
     const get = vi.fn().mockResolvedValue({});
-    const generateContent = vi.fn().mockRejectedValue(quotaError());
-    installClient(get, generateContent);
-
-    await expect(
-      callLlm({ model: 'gemini-2.5-flash-lite', prompt: 'Hi' }),
-    ).rejects.toBeInstanceOf(GeminiQuotaError);
-
-    expect(generateContent).toHaveBeenCalledOnce();
-  });
-
-  it('structured output failover picks gemini-3.1-flash-lite from low tier', async () => {
-    const get = vi.fn().mockResolvedValue({});
-    const generateContent = vi
-      .fn()
-      .mockRejectedValueOnce(quotaError())
-      .mockRejectedValueOnce(quotaError())
-      .mockResolvedValueOnce(createTextResponse('{"ok":true}'));
-
+    const generateContent = vi.fn().mockResolvedValue(createTextResponse('{"ok":true}'));
     installClient(get, generateContent);
 
     const result = await callLlm({
-      thinkingPowerTier: 'medium',
+      model: 'gemini-3.1-flash-lite-minimal',
       prompt: 'JSON',
       structuredOutput: { responseJsonSchema: { type: 'object' } },
     });
 
     expect(result.text).toContain('ok');
-    expect(result.thinkingPowerTierUsed).toBe('low');
-    expect(generateContent).toHaveBeenLastCalledWith(
+    expect(generateContent).toHaveBeenCalledWith(
       expect.objectContaining({
         model: 'gemini-3.1-flash-lite',
         config: expect.objectContaining({ responseMimeType: 'application/json' }),
@@ -228,13 +242,17 @@ describe('callLlm with mocked GenAI client', () => {
     );
   });
 
-  it('builds contents from prompt as a string', async () => {
+  it('encodes prompt as Gemini user content', async () => {
     const generateContent = vi.fn().mockResolvedValue(createTextResponse('ok'));
     installClient(vi.fn().mockResolvedValue({}), generateContent);
 
     await callLlm({ model: 'gemini-2.5-flash-lite', prompt: '  hello  ' });
 
-    expect(generateContent).toHaveBeenCalledWith(expect.objectContaining({ contents: 'hello' }));
+    expect(generateContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contents: [{ role: 'user', parts: [{ text: 'hello' }] }],
+      }),
+    );
   });
 
   it('returns fallback text when response has no text parts', async () => {

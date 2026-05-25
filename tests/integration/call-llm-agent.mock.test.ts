@@ -201,11 +201,10 @@ describe('callLlmAgent with mocked GenAI client', () => {
     installClient(get, generateContent);
 
     const result = await callLlmAgent({
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-2.5-flash-lite-low',
       prompt: 'Think then answer',
       tools: [getYearTool],
       toolHandlers: { get_year: async () => ({ year: 1 }) },
-      thinkingPower: 'low',
     });
 
     expect(result.thoughts).toBe('thinking step 1');

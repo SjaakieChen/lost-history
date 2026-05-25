@@ -145,18 +145,18 @@ describe('pingAllModels', () => {
       .fn()
       .mockRejectedValueOnce({ status: 429, message: 'rate limit' })
       .mockResolvedValueOnce({ name: 'gemini-2.5-flash-lite' })
-      .mockResolvedValueOnce({ name: 'gemini-2.0-flash-lite' });
+      .mockResolvedValueOnce({ name: 'gemini-3-flash-preview' });
     mockedGetGenAIClient.mockReturnValue({ models: { get } } as never);
 
     const reachable = await pingAllModels([
       { apiModelId: 'gemini-3.1-flash-lite', registryKey: 'gemini-3.1-flash-lite' },
       { apiModelId: 'gemini-2.5-flash-lite', registryKey: 'gemini-2.5-flash-lite' },
-      { apiModelId: 'gemini-2.0-flash-lite', registryKey: 'gemini-2.0-flash-lite' },
+      { apiModelId: 'gemini-3-flash-preview', registryKey: 'gemini-3-flash-preview' },
     ]);
 
     expect(get).toHaveBeenCalledTimes(3);
     expect(reachable.has('gemini-3.1-flash-lite')).toBe(false);
     expect(reachable.has('gemini-2.5-flash-lite')).toBe(true);
-    expect(reachable.has('gemini-2.0-flash-lite')).toBe(true);
+    expect(reachable.has('gemini-3-flash-preview')).toBe(true);
   });
 });

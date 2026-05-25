@@ -1,17 +1,16 @@
-export { callLlm, buildFunctionResponseContent, buildLlmContents, normalizeLlmContentsToArray, LlmCapabilityError, resolveCallModel } from './call-llm.js';
+export {
+  callLlm,
+  LlmCapabilityError,
+  resolveCallModel,
+} from './call-llm.js';
+export type { InternalCallLlmOptions, InternalCallLlmResult } from './call-llm.js';
 
 export { callLlmAgent, AgentMaxStepsError } from './call-llm-agent.js';
 
 export type {
-
   CallLlmOptions,
-
   CallLlmResult,
-
-  LlmContentBlock,
-
   LlmFunctionCall,
-
 } from './call-llm.js';
 
 export type { CallLlmAgentOptions, CallLlmAgentResult, AgentStep } from './call-llm-agent.js';
@@ -32,37 +31,30 @@ export {
 } from './availability.js';
 
 export {
+  collectCandidatesForSpeedTier,
   collectModelCandidates,
-  getTierDowngradeChain,
-  isTierDowngraded,
+  getSpeedTierDowngradeChain,
+  isSpeedTierDowngraded,
   iterateModelCandidates,
-  resolveRequestedTier,
+  iterateSpeedTierBatches,
+  resolveRequestedSpeedTier,
 } from './model-selection.js';
 
 export {
-
   assertCapability,
-
   getDefaultModelId,
-
-  getDefaultTier,
-
-  getModelsByTier,
-
+  getDefaultSpeedTier,
+  getModelsBySpeedTier,
   listTextModels,
-
-  resolveModelForTier,
-
+  resolveModelForSpeedTier,
   resolveTextModel,
-
   TEXT_MODEL_REGISTRY,
-
-  TIER_MODEL_STRENGTH_ORDER,
-
+  SPEED_TIER_MODEL_ORDER,
 } from './models.js';
+
+export { areSpeedTierBoundsConfigured, SPEED_TIER_BOUNDS_MS } from './speed-tier-bounds.js';
+export { buildProbeMatrix, CALIBRATION_PROMPT } from './probe-matrix.js';
 
 export { buildThinkingConfig } from './thinking.js';
 
 export { GeminiQuotaError, formatQuotaError, isQuotaOrRateLimitError } from './rate-limit.js';
-
-

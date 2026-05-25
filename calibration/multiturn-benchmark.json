@@ -1,0 +1,425 @@
+{
+  "generatedAt": "2026-05-24T15:15:46.329Z",
+  "prompt": "You must complete this task using tools only, one tool per turn, in this exact order: 1) fetch_piece with id \"A\", 2) combine_pieces with pieces [\"A\",\"B\"], 3) submit_final_answer with answer \"OK\". Call exactly one tool per turn. Never call submit_final_answer before the first two tools. Do not reply with plain text.",
+  "runsPerProbe": 1,
+  "probes": [
+    {
+      "probeKey": "gemini-2.5-flash-lite-off",
+      "apiModelId": "gemini-2.5-flash-lite",
+      "bakedThinkingPower": "off",
+      "thinkingMode": "budget",
+      "runs": [
+        {
+          "totalMs": 136,
+          "stepCount": 0,
+          "ok": false,
+          "error": "Gemini daily quota exhausted (RPD) for \"gemini-2.5-flash-lite-off\". Retry after ~21s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You excee…"
+        }
+      ]
+    },
+    {
+      "probeKey": "gemini-2.5-flash-lite-low",
+      "apiModelId": "gemini-2.5-flash-lite",
+      "bakedThinkingPower": "low",
+      "thinkingMode": "budget",
+      "runs": [
+        {
+          "totalMs": 55,
+          "stepCount": 0,
+          "ok": false,
+          "error": "Gemini daily quota exhausted (RPD) for \"gemini-2.5-flash-lite-low\". Retry after ~21s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You excee…"
+        }
+      ]
+    },
+    {
+      "probeKey": "gemini-2.5-flash-lite-medium",
+      "apiModelId": "gemini-2.5-flash-lite",
+      "bakedThinkingPower": "medium",
+      "thinkingMode": "budget",
+      "runs": [
+        {
+          "totalMs": 57,
+          "stepCount": 0,
+          "ok": false,
+          "error": "Gemini daily quota exhausted (RPD) for \"gemini-2.5-flash-lite-medium\". Retry after ~21s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You ex…"
+        }
+      ]
+    },
+    {
+      "probeKey": "gemini-2.5-flash-lite-high",
+      "apiModelId": "gemini-2.5-flash-lite",
+      "bakedThinkingPower": "high",
+      "thinkingMode": "budget",
+      "runs": [
+        {
+          "totalMs": 51,
+          "stepCount": 0,
+          "ok": false,
+          "error": "Gemini daily quota exhausted (RPD) for \"gemini-2.5-flash-lite-high\". Retry after ~21s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You exce…"
+        }
+      ]
+    },
+    {
+      "probeKey": "gemini-3.1-flash-lite-minimal",
+      "apiModelId": "gemini-3.1-flash-lite",
+      "bakedThinkingPower": "minimal",
+      "thinkingMode": "levels",
+      "runs": [
+        {
+          "totalMs": 5020,
+          "step1Ms": 531,
+          "step2Ms": 774,
+          "step3Ms": 3715,
+          "stepCount": 3,
+          "ok": true
+        }
+      ],
+      "p50TotalMs": 5020,
+      "p95TotalMs": 5020
+    },
+    {
+      "probeKey": "gemini-3.1-flash-lite-low",
+      "apiModelId": "gemini-3.1-flash-lite",
+      "bakedThinkingPower": "low",
+      "thinkingMode": "levels",
+      "runs": [
+        {
+          "totalMs": 11510,
+          "step1Ms": 2768,
+          "step2Ms": 2462,
+          "step3Ms": 6279,
+          "stepCount": 3,
+          "ok": true
+        }
+      ],
+      "p50TotalMs": 11510,
+      "p95TotalMs": 11510
+    },
+    {
+      "probeKey": "gemini-3.1-flash-lite-medium",
+      "apiModelId": "gemini-3.1-flash-lite",
+      "bakedThinkingPower": "medium",
+      "thinkingMode": "levels",
+      "runs": [
+        {
+          "totalMs": 12922,
+          "step1Ms": 1710,
+          "step2Ms": 6105,
+          "step3Ms": 5106,
+          "stepCount": 3,
+          "ok": true
+        }
+      ],
+      "p50TotalMs": 12922,
+      "p95TotalMs": 12922
+    },
+    {
+      "probeKey": "gemini-3.1-flash-lite-high",
+      "apiModelId": "gemini-3.1-flash-lite",
+      "bakedThinkingPower": "high",
+      "thinkingMode": "levels",
+      "runs": [
+        {
+          "totalMs": 7007,
+          "stepCount": 0,
+          "ok": false,
+          "error": "{\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\"status\":\"UNAVAILABLE\"}}"
+        }
+      ]
+    },
+    {
+      "probeKey": "gemini-2.5-flash-off",
+      "apiModelId": "gemini-2.5-flash",
+      "bakedThinkingPower": "off",
+      "thinkingMode": "budget",
+      "runs": [
+        {
+          "totalMs": 215,
+          "stepCount": 0,
+          "ok": false,
+          "error": "Gemini daily quota exhausted (RPD) for \"gemini-2.5-flash-off\". Retry after ~45s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You exceeded y…"
+        }
+      ]
+    },
+    {
+      "probeKey": "gemini-2.5-flash-low",
+      "apiModelId": "gemini-2.5-flash",
+      "bakedThinkingPower": "low",
+      "thinkingMode": "budget",
+      "runs": [
+        {
+          "totalMs": 85,
+          "stepCount": 0,
+          "ok": false,
+          "error": "Gemini daily quota exhausted (RPD) for \"gemini-2.5-flash-low\". Retry after ~44s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You exceeded y…"
+        }
+      ]
+    },
+    {
+      "probeKey": "gemini-2.5-flash-medium",
+      "apiModelId": "gemini-2.5-flash",
+      "bakedThinkingPower": "medium",
+      "thinkingMode": "budget",
+      "runs": [
+        {
+          "totalMs": 77,
+          "stepCount": 0,
+          "ok": false,
+          "error": "Gemini daily quota exhausted (RPD) for \"gemini-2.5-flash-medium\". Retry after ~44s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You exceede…"
+        }
+      ]
+    },
+    {
+      "probeKey": "gemini-2.5-flash-high",
+      "apiModelId": "gemini-2.5-flash",
+      "bakedThinkingPower": "high",
+      "thinkingMode": "budget",
+      "runs": [
+        {
+          "totalMs": 104,
+          "stepCount": 0,
+          "ok": false,
+          "error": "Gemini daily quota exhausted (RPD) for \"gemini-2.5-flash-high\". Retry after ~44s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You exceeded …"
+        }
+      ]
+    },
+    {
+      "probeKey": "gemini-3-flash-minimal",
+      "apiModelId": "gemini-3-flash-preview",
+      "bakedThinkingPower": "minimal",
+      "thinkingMode": "levels",
+      "runs": [
+        {
+          "totalMs": 203,
+          "stepCount": 0,
+          "ok": false,
+          "error": "Gemini daily quota exhausted (RPD) for \"gemini-3-flash-minimal\". Retry after ~44s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You exceeded…"
+        }
+      ]
+    },
+    {
+      "probeKey": "gemini-3-flash-low",
+      "apiModelId": "gemini-3-flash-preview",
+      "bakedThinkingPower": "low",
+      "thinkingMode": "levels",
+      "runs": [
+        {
+          "totalMs": 49,
+          "stepCount": 0,
+          "ok": false,
+          "error": "Gemini daily quota exhausted (RPD) for \"gemini-3-flash-low\". Retry after ~44s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You exceeded you…"
+        }
+      ]
+    },
+    {
+      "probeKey": "gemini-3-flash-medium",
+      "apiModelId": "gemini-3-flash-preview",
+      "bakedThinkingPower": "medium",
+      "thinkingMode": "levels",
+      "runs": [
+        {
+          "totalMs": 48,
+          "stepCount": 0,
+          "ok": false,
+          "error": "Gemini daily quota exhausted (RPD) for \"gemini-3-flash-medium\". Retry after ~44s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You exceeded …"
+        }
+      ]
+    },
+    {
+      "probeKey": "gemini-3-flash-high",
+      "apiModelId": "gemini-3-flash-preview",
+      "bakedThinkingPower": "high",
+      "thinkingMode": "levels",
+      "runs": [
+        {
+          "totalMs": 36,
+          "stepCount": 0,
+          "ok": false,
+          "error": "Gemini daily quota exhausted (RPD) for \"gemini-3-flash-high\". Retry after ~44s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You exceeded yo…"
+        }
+      ]
+    },
+    {
+      "probeKey": "gemini-3.5-flash-minimal",
+      "apiModelId": "gemini-3.5-flash",
+      "bakedThinkingPower": "minimal",
+      "thinkingMode": "levels",
+      "runs": [
+        {
+          "totalMs": 147,
+          "stepCount": 0,
+          "ok": false,
+          "error": "Gemini daily quota exhausted (RPD) for \"gemini-3.5-flash-minimal\". Retry after ~44s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You exceed…"
+        }
+      ]
+    },
+    {
+      "probeKey": "gemini-3.5-flash-low",
+      "apiModelId": "gemini-3.5-flash",
+      "bakedThinkingPower": "low",
+      "thinkingMode": "levels",
+      "runs": [
+        {
+          "totalMs": 49,
+          "stepCount": 0,
+          "ok": false,
+          "error": "Gemini daily quota exhausted (RPD) for \"gemini-3.5-flash-low\". Retry after ~44s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You exceeded y…"
+        }
+      ]
+    },
+    {
+      "probeKey": "gemini-3.5-flash-medium",
+      "apiModelId": "gemini-3.5-flash",
+      "bakedThinkingPower": "medium",
+      "thinkingMode": "levels",
+      "runs": [
+        {
+          "totalMs": 47,
+          "stepCount": 0,
+          "ok": false,
+          "error": "Gemini daily quota exhausted (RPD) for \"gemini-3.5-flash-medium\". Retry after ~44s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You exceede…"
+        }
+      ]
+    },
+    {
+      "probeKey": "gemini-3.5-flash-high",
+      "apiModelId": "gemini-3.5-flash",
+      "bakedThinkingPower": "high",
+      "thinkingMode": "levels",
+      "runs": [
+        {
+          "totalMs": 44,
+          "stepCount": 0,
+          "ok": false,
+          "error": "Gemini daily quota exhausted (RPD) for \"gemini-3.5-flash-high\". Retry after ~44s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You exceeded …"
+        }
+      ]
+    },
+    {
+      "probeKey": "llama-3.1-8b-instant-off",
+      "apiModelId": "llama-3.1-8b-instant",
+      "bakedThinkingPower": "off",
+      "thinkingMode": "none",
+      "runs": [
+        {
+          "totalMs": 4174,
+          "step1Ms": 212,
+          "step2Ms": 2063,
+          "step3Ms": 1899,
+          "stepCount": 3,
+          "ok": true
+        }
+      ],
+      "p50TotalMs": 4174,
+      "p95TotalMs": 4174
+    },
+    {
+      "probeKey": "llama-3.3-70b-versatile-off",
+      "apiModelId": "llama-3.3-70b-versatile",
+      "bakedThinkingPower": "off",
+      "thinkingMode": "none",
+      "runs": [
+        {
+          "totalMs": 4145,
+          "step1Ms": 189,
+          "step2Ms": 1999,
+          "step3Ms": 1956,
+          "stepCount": 3,
+          "ok": true
+        }
+      ],
+      "p50TotalMs": 4145,
+      "p95TotalMs": 4145
+    },
+    {
+      "probeKey": "meta-llama--llama-4-scout-17b-16e-instruct-off",
+      "apiModelId": "meta-llama/llama-4-scout-17b-16e-instruct",
+      "bakedThinkingPower": "off",
+      "thinkingMode": "none",
+      "runs": [
+        {
+          "totalMs": 4178,
+          "step1Ms": 153,
+          "step2Ms": 2020,
+          "step3Ms": 2004,
+          "stepCount": 3,
+          "ok": true
+        }
+      ],
+      "p50TotalMs": 4178,
+      "p95TotalMs": 4178
+    },
+    {
+      "probeKey": "openai--gpt-oss-120b-off",
+      "apiModelId": "openai/gpt-oss-120b",
+      "bakedThinkingPower": "off",
+      "thinkingMode": "none",
+      "runs": [
+        {
+          "totalMs": 4232,
+          "step1Ms": 267,
+          "step2Ms": 1987,
+          "step3Ms": 1977,
+          "stepCount": 3,
+          "ok": true
+        }
+      ],
+      "p50TotalMs": 4232,
+      "p95TotalMs": 4232
+    },
+    {
+      "probeKey": "openai--gpt-oss-20b-off",
+      "apiModelId": "openai/gpt-oss-20b",
+      "bakedThinkingPower": "off",
+      "thinkingMode": "none",
+      "runs": [
+        {
+          "totalMs": 4119,
+          "step1Ms": 251,
+          "step2Ms": 1853,
+          "step3Ms": 2015,
+          "stepCount": 3,
+          "ok": true
+        }
+      ],
+      "p50TotalMs": 4119,
+      "p95TotalMs": 4119
+    },
+    {
+      "probeKey": "openai--gpt-oss-safeguard-20b-off",
+      "apiModelId": "openai/gpt-oss-safeguard-20b",
+      "bakedThinkingPower": "off",
+      "thinkingMode": "none",
+      "runs": [
+        {
+          "totalMs": 4214,
+          "step1Ms": 315,
+          "step2Ms": 2166,
+          "step3Ms": 1732,
+          "stepCount": 3,
+          "ok": true
+        }
+      ],
+      "p50TotalMs": 4214,
+      "p95TotalMs": 4214
+    },
+    {
+      "probeKey": "qwen--qwen3-32b-off",
+      "apiModelId": "qwen/qwen3-32b",
+      "bakedThinkingPower": "off",
+      "thinkingMode": "none",
+      "runs": [
+        {
+          "totalMs": 4718,
+          "step1Ms": 926,
+          "step2Ms": 1646,
+          "step3Ms": 2145,
+          "stepCount": 3,
+          "ok": true
+        }
+      ],
+      "p50TotalMs": 4718,
+      "p95TotalMs": 4718
+    }
+  ]
+}

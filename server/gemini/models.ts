@@ -1,153 +1,60 @@
 import type {
   GetModelsByTierOptions,
+  SpeedTier,
   TextModelInfo,
   ThinkingModeKind,
-  ThinkingPowerTier,
 } from '../../shared/gemini-types.js';
+import { buildBenchmarkLookup, loadSpeedBenchmarkReport } from './speed-benchmark.js';
+import { buildProbeMatrix } from './probe-matrix.js';
+import { inferGroqSpeedTier } from '../groq/models-base.js';
+import {
+  inferSpeedTierFromModelId,
+  inferThinkingMode,
+  listTextModels as listBaseTextModels,
+} from './models-base.js';
+import { resolveProbeSpeedTier } from './speed-tier-classify.js';
 
-/** Strongest-first order within each tier (index 0 = rank 1). */
-export const TIER_MODEL_STRENGTH_ORDER: Record<ThinkingPowerTier, string[]> = {
-  low: ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.0-flash-lite'],
-  medium: ['gemini-3.5-flash', 'gemini-3-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'],
-  high: ['gemini-3.1-pro', 'gemini-2.5-pro'],
-};
+function buildRegistry(): Record<string, TextModelInfo> {
+  const benchmark = loadSpeedBenchmarkReport();
+  const p50ByProbe = buildBenchmarkLookup(benchmark);
+  const probes = buildProbeMatrix();
+  const registry: Record<string, TextModelInfo> = {};
 
-/** @deprecated Use TIER_MODEL_STRENGTH_ORDER */
-export const TIER_MODEL_PRIORITY = TIER_MODEL_STRENGTH_ORDER;
+  for (const probe of probes) {
+    const p50Ms = p50ByProbe.get(probe.probeKey);
+    const speedTier = resolveProbeSpeedTier(p50Ms, probe.bakedThinkingPower);
 
-const BASE_REGISTRY: Record<string, Omit<TextModelInfo, 'strengthRank'>> = {
-  'gemini-2.0-flash-lite': {
-    id: 'gemini-2.0-flash-lite',
-    apiModelId: 'gemini-2.0-flash-lite',
-    displayName: 'Gemini 2.0 Flash Lite',
-    category: 'text',
-    thinkingPowerTier: 'low',
-    supportsThinking: false,
-    thinkingMode: 'none',
-    supportsFunctionCalling: true,
-    supportsStructuredOutput: false,
-    freeTierAvailable: true,
-    rateLimitHints: { rpm: 0, tpm: 0, rpd: 0 },
-    aliases: ['gemini-2.0-flash-lite-001'],
-  },
-  'gemini-2.5-flash-lite': {
-    id: 'gemini-2.5-flash-lite',
-    apiModelId: 'gemini-2.5-flash-lite',
-    displayName: 'Gemini 2.5 Flash Lite',
-    category: 'text',
-    thinkingPowerTier: 'low',
-    supportsThinking: true,
-    thinkingMode: 'budget',
-    supportsFunctionCalling: true,
-    supportsStructuredOutput: false,
-    freeTierAvailable: true,
-    rateLimitHints: { rpm: 10, tpm: 250_000, rpd: 20 },
-  },
-  'gemini-3.1-flash-lite': {
-    id: 'gemini-3.1-flash-lite',
-    apiModelId: 'gemini-3.1-flash-lite',
-    displayName: 'Gemini 3.1 Flash Lite',
-    category: 'text',
-    thinkingPowerTier: 'low',
-    supportsThinking: true,
-    thinkingMode: 'levels',
-    supportsFunctionCalling: true,
-    supportsStructuredOutput: true,
-    freeTierAvailable: true,
-    rateLimitHints: { rpm: 15, tpm: 250_000, rpd: 500 },
-    aliases: ['gemini-3.1-flash-lite-preview'],
-  },
-  'gemini-2.0-flash': {
-    id: 'gemini-2.0-flash',
-    apiModelId: 'gemini-2.0-flash',
-    displayName: 'Gemini 2.0 Flash',
-    category: 'text',
-    thinkingPowerTier: 'medium',
-    supportsThinking: false,
-    thinkingMode: 'none',
-    supportsFunctionCalling: true,
-    supportsStructuredOutput: false,
-    freeTierAvailable: true,
-    rateLimitHints: { rpm: 0, tpm: 0, rpd: 0 },
-    aliases: ['gemini-2.0-flash-001'],
-  },
-  'gemini-2.5-flash': {
-    id: 'gemini-2.5-flash',
-    apiModelId: 'gemini-2.5-flash',
-    displayName: 'Gemini 2.5 Flash',
-    category: 'text',
-    thinkingPowerTier: 'medium',
-    supportsThinking: true,
-    thinkingMode: 'budget',
-    supportsFunctionCalling: true,
-    supportsStructuredOutput: false,
-    freeTierAvailable: true,
-    rateLimitHints: { rpm: 5, tpm: 250_000, rpd: 20 },
-  },
-  'gemini-3-flash': {
-    id: 'gemini-3-flash',
-    apiModelId: 'gemini-3-flash-preview',
-    displayName: 'Gemini 3 Flash',
-    category: 'text',
-    thinkingPowerTier: 'medium',
-    supportsThinking: true,
-    thinkingMode: 'levels',
-    supportsFunctionCalling: true,
-    supportsStructuredOutput: true,
-    freeTierAvailable: true,
-    rateLimitHints: { rpm: 5, tpm: 250_000, rpd: 20 },
-    aliases: ['gemini-3-flash-preview'],
-  },
-  'gemini-3.5-flash': {
-    id: 'gemini-3.5-flash',
-    apiModelId: 'gemini-3.5-flash',
-    displayName: 'Gemini 3.5 Flash',
-    category: 'text',
-    thinkingPowerTier: 'medium',
-    supportsThinking: true,
-    thinkingMode: 'levels',
-    supportsFunctionCalling: true,
-    supportsStructuredOutput: true,
-    freeTierAvailable: true,
-    rateLimitHints: { rpm: 5, tpm: 250_000, rpd: 20 },
-  },
-  'gemini-2.5-pro': {
-    id: 'gemini-2.5-pro',
-    apiModelId: 'gemini-2.5-pro',
-    displayName: 'Gemini 2.5 Pro',
-    category: 'text',
-    thinkingPowerTier: 'high',
-    supportsThinking: true,
-    thinkingMode: 'budget',
-    supportsFunctionCalling: true,
-    supportsStructuredOutput: false,
-    freeTierAvailable: false,
-    rateLimitHints: { rpm: 0, tpm: 0, rpd: 0 },
-  },
-  'gemini-3.1-pro': {
-    id: 'gemini-3.1-pro',
-    apiModelId: 'gemini-3.1-pro-preview',
-    displayName: 'Gemini 3.1 Pro',
-    category: 'text',
-    thinkingPowerTier: 'high',
-    supportsThinking: true,
-    thinkingMode: 'levels',
-    supportsFunctionCalling: true,
-    supportsStructuredOutput: true,
-    freeTierAvailable: false,
-    rateLimitHints: { rpm: 0, tpm: 0, rpd: 0 },
-    aliases: ['gemini-3.1-pro-preview'],
-  },
-};
+    registry[probe.probeKey] = {
+      id: probe.probeKey,
+      apiModelId: probe.apiModelId,
+      displayName: probe.displayName,
+      category: 'text',
+      provider: probe.provider,
+      speedTier,
+      bakedThinkingPower: probe.bakedThinkingPower,
+      supportsThinking: probe.supportsThinking,
+      thinkingMode: probe.thinkingMode,
+      supportsFunctionCalling: probe.supportsFunctionCalling,
+      supportsStructuredOutput: probe.supportsStructuredOutput,
+      freeTierAvailable: probe.freeTierAvailable,
+      rateLimitHints: probe.rateLimitHints,
+      aliases: probe.aliases,
+    };
+  }
+
+  const order = buildSpeedTierModelOrder(registry, p50ByProbe);
+  return attachStrengthRanks(registry, order);
+}
 
 function attachStrengthRanks(
-  registry: Record<string, Omit<TextModelInfo, 'strengthRank'>>,
+  registry: Record<string, TextModelInfo>,
+  order: Record<SpeedTier, string[]>,
 ): Record<string, TextModelInfo> {
   const result: Record<string, TextModelInfo> = {};
 
   for (const [id, model] of Object.entries(registry)) {
-    const order = TIER_MODEL_STRENGTH_ORDER[model.thinkingPowerTier];
-    const rank = order.indexOf(id);
+    const tierOrder = order[model.speedTier];
+    const rank = tierOrder.indexOf(id);
     result[id] = {
       ...model,
       strengthRank: rank >= 0 ? rank + 1 : undefined,
@@ -157,20 +64,88 @@ function attachStrengthRanks(
   return result;
 }
 
-/** Official API ids verified via GET /v1beta/models (May 2026). */
-export const TEXT_MODEL_REGISTRY: Record<string, TextModelInfo> =
-  attachStrengthRanks(BASE_REGISTRY);
+export function buildSpeedTierModelOrder(
+  registry: Record<string, TextModelInfo>,
+  p50ByProbe: Map<string, number> = buildBenchmarkLookup(loadSpeedBenchmarkReport()),
+): Record<SpeedTier, string[]> {
+  const tiers: Record<SpeedTier, string[]> = {
+    instant: [],
+    fast: [],
+    moderate: [],
+    slow: [],
+  };
+
+  for (const model of Object.values(registry)) {
+    tiers[model.speedTier].push(model.id);
+  }
+
+  const baseStrength = listBaseTextModels().map((model) => model.id);
+
+  for (const tier of Object.keys(tiers) as SpeedTier[]) {
+    tiers[tier].sort((a, b) => {
+      const p50A = p50ByProbe.get(a);
+      const p50B = p50ByProbe.get(b);
+      if (p50A !== undefined && p50B !== undefined && p50A !== p50B) {
+        return p50A - p50B;
+      }
+      const baseA = baseStrength.indexOf(a.replace(/-(minimal|low|medium|high|off)$/, ''));
+      const baseB = baseStrength.indexOf(b.replace(/-(minimal|low|medium|high|off)$/, ''));
+      if (baseA !== -1 && baseB !== -1 && baseA !== baseB) {
+        return baseA - baseB;
+      }
+      return a.localeCompare(b);
+    });
+  }
+
+  return tiers;
+}
+
+const BENCHMARK_LOOKUP = buildBenchmarkLookup(loadSpeedBenchmarkReport());
+const REGISTRY_WITHOUT_RANKS = (() => {
+  const benchmark = loadSpeedBenchmarkReport();
+  const p50ByProbe = buildBenchmarkLookup(benchmark);
+  const probes = buildProbeMatrix();
+  const registry: Record<string, TextModelInfo> = {};
+  for (const probe of probes) {
+    const p50Ms = p50ByProbe.get(probe.probeKey);
+    const speedTier = resolveProbeSpeedTier(p50Ms, probe.bakedThinkingPower);
+    registry[probe.probeKey] = {
+      id: probe.probeKey,
+      apiModelId: probe.apiModelId,
+      displayName: probe.displayName,
+      category: 'text',
+      provider: probe.provider,
+      speedTier,
+      bakedThinkingPower: probe.bakedThinkingPower,
+      supportsThinking: probe.supportsThinking,
+      thinkingMode: probe.thinkingMode,
+      supportsFunctionCalling: probe.supportsFunctionCalling,
+      supportsStructuredOutput: probe.supportsStructuredOutput,
+      freeTierAvailable: probe.freeTierAvailable,
+      rateLimitHints: probe.rateLimitHints,
+      aliases: probe.aliases,
+    };
+  }
+  return registry;
+})();
+
+export const SPEED_TIER_MODEL_ORDER: Record<SpeedTier, string[]> = buildSpeedTierModelOrder(
+  REGISTRY_WITHOUT_RANKS,
+  BENCHMARK_LOOKUP,
+);
+
+export const TEXT_MODEL_REGISTRY: Record<string, TextModelInfo> = attachStrengthRanks(
+  REGISTRY_WITHOUT_RANKS,
+  SPEED_TIER_MODEL_ORDER,
+);
 
 const ALIAS_INDEX = buildAliasIndex(TEXT_MODEL_REGISTRY);
 
-function buildAliasIndex(
-  registry: Record<string, TextModelInfo>,
-): Map<string, TextModelInfo> {
+function buildAliasIndex(registry: Record<string, TextModelInfo>): Map<string, TextModelInfo> {
   const index = new Map<string, TextModelInfo>();
 
   for (const model of Object.values(registry)) {
     index.set(model.id, model);
-    index.set(model.apiModelId, model);
     for (const alias of model.aliases ?? []) {
       index.set(alias, model);
     }
@@ -183,7 +158,7 @@ export interface ResolvedTextModel {
   registryKey: string;
   apiModelId: string;
   info: TextModelInfo;
-  tier: ThinkingPowerTier;
+  tier: SpeedTier;
 }
 
 export type LlmCapability = 'functionCalling' | 'structuredOutput' | 'thinking';
@@ -233,61 +208,39 @@ export function resolveTextModel(model?: string): ResolvedTextModel {
       registryKey: info.id,
       apiModelId: info.apiModelId,
       info,
-      tier: info.thinkingPowerTier,
+      tier: info.speedTier,
     };
   }
 
-  const thinkingMode = inferThinkingMode(requested);
-  const tier = inferThinkingPowerTier(requested);
+  const isGroq =
+    requested.includes('/') ||
+    /--/.test(requested) ||
+    /^(allam-|llama-|groq\/|openai\/|qwen\/|meta-llama\/)/.test(requested);
+  const apiModelId = isGroq && /--/.test(requested)
+    ? requested.replace(/--/g, '/')
+    : requested;
+  const thinkingMode = isGroq ? 'none' : inferThinkingMode(requested);
+  const speedTier = isGroq ? inferGroqSpeedTier(requested) : inferSpeedTierFromModelId(requested);
 
   return {
     registryKey: requested,
-    apiModelId: requested,
-    tier,
+    apiModelId,
+    tier: speedTier,
     info: {
       id: requested,
-      apiModelId: requested,
+      apiModelId,
       displayName: requested,
       category: 'text',
-      thinkingPowerTier: tier,
-      supportsThinking: thinkingMode !== 'none',
+      provider: isGroq ? 'groq' : 'gemini',
+      speedTier,
+      bakedThinkingPower: isGroq ? 'off' : 'medium',
+      supportsThinking: !isGroq && thinkingMode !== 'none',
       thinkingMode,
-      supportsFunctionCalling: inferFunctionCallingSupport(requested),
-      supportsStructuredOutput: inferStructuredOutputSupport(requested),
+      supportsFunctionCalling: isGroq ? false : true,
+      supportsStructuredOutput: isGroq ? false : /gemini-3/.test(requested),
       freeTierAvailable: true,
     },
   };
-}
-
-function inferThinkingMode(modelId: string): ThinkingModeKind {
-  if (/gemini-2\.0-/.test(modelId)) {
-    return 'none';
-  }
-  if (/gemini-2\.5-/.test(modelId)) {
-    return 'budget';
-  }
-  if (/gemini-3/.test(modelId)) {
-    return 'levels';
-  }
-  return 'none';
-}
-
-function inferStructuredOutputSupport(modelId: string): boolean {
-  return /gemini-3/.test(modelId);
-}
-
-function inferFunctionCallingSupport(_modelId: string): boolean {
-  return true;
-}
-
-function inferThinkingPowerTier(modelId: string): ThinkingPowerTier {
-  if (/pro/i.test(modelId)) {
-    return 'high';
-  }
-  if (/lite/i.test(modelId)) {
-    return 'low';
-  }
-  return 'medium';
 }
 
 function filterModelsByOptions(
@@ -310,32 +263,28 @@ function filterModelsByOptions(
   });
 }
 
-export function getModelsByTier(
-  tier: ThinkingPowerTier,
+export function getModelsBySpeedTier(
+  tier: SpeedTier,
   options?: GetModelsByTierOptions,
 ): TextModelInfo[] {
-  const priority = TIER_MODEL_STRENGTH_ORDER[tier];
-  const byTier = Object.values(TEXT_MODEL_REGISTRY).filter(
-    (model) => model.thinkingPowerTier === tier,
-  );
+  const priority = SPEED_TIER_MODEL_ORDER[tier];
+  const byTier = Object.values(TEXT_MODEL_REGISTRY).filter((model) => model.speedTier === tier);
 
-  const sorted = byTier.sort(
-    (a, b) => priority.indexOf(a.id) - priority.indexOf(b.id),
-  );
+  const sorted = byTier.sort((a, b) => priority.indexOf(a.id) - priority.indexOf(b.id));
 
   return filterModelsByOptions(sorted, options);
 }
 
-export function resolveModelForTier(
-  tier: ThinkingPowerTier,
+export function resolveModelForSpeedTier(
+  tier: SpeedTier,
   preferFreeTier = true,
 ): ResolvedTextModel {
-  const models = getModelsByTier(tier, { preferFreeTier });
+  const models = getModelsBySpeedTier(tier, { preferFreeTier });
 
   if (models.length === 0) {
-    const allInTier = getModelsByTier(tier, { preferFreeTier: false });
+    const allInTier = getModelsBySpeedTier(tier, { preferFreeTier: false });
     if (allInTier.length === 0) {
-      throw new Error(`No models registered for tier "${tier}".`);
+      throw new Error(`No models registered for speed tier "${tier}".`);
     }
     const chosen = allInTier[0];
     return {
@@ -360,11 +309,22 @@ export function listTextModels(): TextModelInfo[] {
   return Object.values(TEXT_MODEL_REGISTRY).filter((model) => model.category === 'text');
 }
 
-export function getDefaultModelId(): string {
-  return process.env.GEMINI_DEFAULT_MODEL?.trim() || 'gemini-3.1-flash-lite';
+export function listBaseTextModelIds(): string[] {
+  return listBaseTextModels().map((model) => model.id);
 }
 
-export function getDefaultTier(): ThinkingPowerTier {
+export function getDefaultModelId(): string {
+  const fromEnv = process.env.GEMINI_DEFAULT_MODEL?.trim();
+  if (fromEnv) {
+    return fromEnv;
+  }
+  if (TEXT_MODEL_REGISTRY['gemini-3.1-flash-lite-minimal']) {
+    return 'gemini-3.1-flash-lite-minimal';
+  }
+  return SPEED_TIER_MODEL_ORDER.instant[0] ?? 'gemini-3.1-flash-lite-minimal';
+}
+
+export function getDefaultSpeedTier(): SpeedTier {
   const defaultModel = getDefaultModelId();
   const resolved = resolveTextModel(defaultModel);
   return resolved.tier;

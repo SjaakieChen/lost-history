@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetExhaustionState } from '../../server/gemini/availability.js';
 import { callLlm, resolveCallModel, LlmCapabilityError } from '../../server/gemini/call-llm.js';
-import { GeminiQuotaError } from '../../server/gemini/rate-limit.js';
 import { getGenAIClient } from '../../server/gemini/client.js';
+import { SPEED_TIER_MODEL_ORDER } from '../../server/gemini/models.js';
 import { createTextResponse, quotaError } from '../helpers/mock-genai.js';
 
 vi.mock('../../server/gemini/rate-limit.js', async (importOriginal) => {
@@ -30,28 +30,34 @@ describe('callLlm validation (before API)', () => {
     vi.clearAllMocks();
   });
 
-  it('throws when prompt, messages, and contents are all missing', async () => {
+  it('throws when prompt and messages are both missing', async () => {
     await expect(callLlm({ model: 'gemini-2.5-flash-lite' })).rejects.toThrow(
-      'Either contents, prompt, or messages is required.',
+      'Either prompt or messages is required.',
     );
   });
 
   it('throws when prompt is whitespace only', async () => {
     await expect(
       callLlm({ model: 'gemini-2.5-flash-lite', prompt: '   ' }),
-    ).rejects.toThrow('Either contents, prompt, or messages is required.');
+    ).rejects.toThrow('Either prompt or messages is required.');
   });
 
   it('throws when messages array is empty', async () => {
     await expect(
       callLlm({ model: 'gemini-2.5-flash-lite', messages: [] }),
-    ).rejects.toThrow('Either contents, prompt, or messages is required.');
+    ).rejects.toThrow('Either prompt or messages is required.');
   });
 
-  it('throws when contents array is empty', async () => {
+  it('throws LlmCapabilityError for structuredOutput on gemini-2.5-flash-lite', async () => {
+    installClient(vi.fn());
+
     await expect(
-      callLlm({ model: 'gemini-2.5-flash-lite', contents: [] }),
-    ).rejects.toThrow('Either contents, prompt, or messages is required.');
+      callLlm({
+        model: 'gemini-2.5-flash-lite-off',
+        prompt: 'hello',
+        structuredOutput: { responseSchema: { type: 'object' } },
+      }),
+    ).rejects.toThrow(LlmCapabilityError);
   });
 
   it('throws LlmCapabilityError for structuredOutput on gemini-2.5-flash-lite', async () => {
@@ -61,33 +67,21 @@ describe('callLlm validation (before API)', () => {
       callLlm({
         model: 'gemini-2.5-flash-lite',
         prompt: 'hello',
-        structuredOutput: { responseSchema: { type: 'object' } },
-      }),
-    ).rejects.toThrow(LlmCapabilityError);
-  });
-
-  it('throws LlmCapabilityError for structuredOutput on gemini-2.0-flash', async () => {
-    installClient(vi.fn());
-
-    await expect(
-      callLlm({
-        model: 'gemini-2.0-flash',
-        prompt: 'hello',
         structuredOutput: { responseJsonSchema: { type: 'object' } },
       }),
     ).rejects.toMatchObject({
       name: 'LlmCapabilityError',
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash-lite-medium',
       capability: 'structuredOutput',
     });
   });
 
-  it('passes function-calling capability check for gemini-2.0-flash before API', async () => {
+  it('passes function-calling capability check for gemini-2.5-flash before API', async () => {
     const generateContent = vi.fn().mockResolvedValue(createTextResponse('ok'));
     installClient(generateContent);
 
     await callLlm({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       prompt: 'hello',
       tools: [{ name: 'get_answer', description: 'Returns an answer' }],
     });
@@ -95,15 +89,35 @@ describe('callLlm validation (before API)', () => {
     expect(generateContent).toHaveBeenCalledOnce();
   });
 
-  it('explicit model throws on quota without trying other models', async () => {
-    const generateContent = vi.fn().mockRejectedValue(quotaError());
-    installClient(generateContent);
+  it('explicit model failovers on quota (A2)', async () => {
+    const preferredApi = 'gemini-2.5-flash-lite';
+    const get = vi.fn().mockResolvedValue({});
+    const generateContent = vi.fn().mockImplementation(({ model }: { model: string }) => {
+      if (model === preferredApi) {
+        return Promise.reject(quotaError());
+      }
+      return Promise.resolve(createTextResponse('failover ok'));
+    });
+    installClient(generateContent, get);
+
+    const result = await callLlm({ model: 'gemini-2.5-flash-lite', prompt: 'hello' });
+
+    expect(result.text).toBe('failover ok');
+    expect(result.modelSelectedBy).toBe('preferred_failover');
+    expect(result.modelsAttempted!.length).toBeGreaterThanOrEqual(2);
+    expect(generateContent.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('explicit model throws LlmCapabilityError without tier failover', async () => {
+    installClient(vi.fn());
 
     await expect(
-      callLlm({ model: 'gemini-2.5-flash-lite', prompt: 'hello' }),
-    ).rejects.toBeInstanceOf(GeminiQuotaError);
-
-    expect(generateContent).toHaveBeenCalledOnce();
+      callLlm({
+        model: 'gemini-2.5-flash-lite',
+        prompt: 'hello',
+        structuredOutput: { responseJsonSchema: { type: 'object' } },
+      }),
+    ).rejects.toBeInstanceOf(LlmCapabilityError);
   });
 
   it('warns for models without free tier availability', async () => {
@@ -125,14 +139,16 @@ describe('resolveCallModel', () => {
   });
 
   it('returns explicit model registry key', () => {
-    expect(resolveCallModel({ model: 'gemini-3-flash' })).toBe('gemini-3-flash');
+    expect(resolveCallModel({ model: 'gemini-3-flash' })).toBe('gemini-3-flash-medium');
   });
 
-  it('returns strongest tier default when thinkingPowerTier is medium', () => {
-    expect(resolveCallModel({ thinkingPowerTier: 'medium' })).toBe('gemini-3.5-flash');
+  it('returns strongest moderate tier default when speedTier is moderate', () => {
+    expect(resolveCallModel({ speedTier: 'moderate' })).toBe(
+      SPEED_TIER_MODEL_ORDER.moderate[0],
+    );
   });
 
   it('falls back to default model id when no model or tier', () => {
-    expect(resolveCallModel({})).toBe('gemini-3.1-flash-lite');
+    expect(resolveCallModel({})).toBe('gemini-3.1-flash-lite-minimal');
   });
 });

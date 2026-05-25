@@ -19,42 +19,44 @@ describe('HTTP API', () => {
       expect(response.body.models.length).toBeGreaterThan(0);
 
       const model = response.body.models.find(
-        (entry: { id: string }) => entry.id === 'gemini-3.1-flash-lite',
+        (entry: { id: string }) => entry.id === 'gemini-3.1-flash-lite-minimal',
       );
       expect(model).toMatchObject({
-        id: 'gemini-3.1-flash-lite',
-        strengthRank: 1,
+        id: 'gemini-3.1-flash-lite-minimal',
+        strengthRank: expect.any(Number),
         supportsFunctionCalling: true,
         supportsStructuredOutput: true,
         thinkingMode: 'levels',
-        thinkingPowerTier: 'low',
+        speedTier: 'instant',
+        bakedThinkingPower: 'minimal',
       });
     });
   });
 
   describe('POST /api/llm', () => {
-    it('returns 200 with callLlm result shape including tier metadata', async () => {
+    it('returns 200 with callLlm result shape including speed tier metadata', async () => {
       const spy = vi.spyOn(callLlmModule, 'callLlm').mockResolvedValue({
         text: 'Hello',
         model: 'gemini-3.1-flash-lite',
+        registryKey: 'gemini-3.1-flash-lite-minimal',
         thinkingUsed: false,
-        thinkingPowerApplied: 'off',
+        thinkingPowerApplied: 'minimal',
         modelSelectedBy: 'tier',
-        thinkingPowerTierRequested: 'low',
-        thinkingPowerTierUsed: 'low',
-        tierDowngraded: false,
-        modelsAttempted: ['gemini-3.1-flash-lite'],
+        speedTierRequested: 'instant',
+        speedTierUsed: 'instant',
+        speedTierDowngraded: false,
+        modelsAttempted: ['gemini-3.1-flash-lite-minimal'],
       });
 
       const response = await request(app)
         .post('/api/llm')
-        .send({ prompt: 'Hi', thinkingPowerTier: 'low' })
+        .send({ prompt: 'Hi', speedTier: 'instant' })
         .expect(200);
 
       expect(response.body).toMatchObject({
         text: 'Hello',
         modelSelectedBy: 'tier',
-        thinkingPowerTierUsed: 'low',
+        speedTierUsed: 'instant',
       });
       expect(spy).toHaveBeenCalledOnce();
     });
@@ -67,39 +69,39 @@ describe('HTTP API', () => {
         .send({ model: 'gemini-2.5-flash-lite' })
         .expect(400);
 
-      expect(response.body.error).toBe('contents, prompt, or messages are required.');
+      expect(response.body.error).toBe('prompt or messages are required.');
       expect(spy).not.toHaveBeenCalled();
     });
 
-    it('returns 400 with capability details for structuredOutput on 2.0 model', async () => {
+    it('returns 400 with capability details for structuredOutput on unsupported model', async () => {
       const response = await request(app)
         .post('/api/llm')
         .send({
           prompt: 'Hi',
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash-lite',
           structuredOutput: { responseSchema: { type: 'object' } },
         })
         .expect(400);
 
       expect(response.body).toEqual({
-        error: 'Model "gemini-2.0-flash" does not support structuredOutput.',
-        model: 'gemini-2.0-flash',
+        error: 'Model "gemini-2.5-flash-lite-medium" does not support structuredOutput.',
+        model: 'gemini-2.5-flash-lite-medium',
         capability: 'structuredOutput',
       });
     });
 
     it('returns 429 when all models are exhausted', async () => {
       vi.spyOn(callLlmModule, 'callLlm').mockRejectedValue(
-        new GeminiQuotaError('All models exhausted', 'gemini-2.5-flash'),
+        new GeminiQuotaError('All models exhausted', 'gemini-2.5-flash-medium'),
       );
 
       const response = await request(app)
         .post('/api/llm')
-        .send({ prompt: 'Hi', thinkingPowerTier: 'medium' })
+        .send({ prompt: 'Hi', speedTier: 'moderate' })
         .expect(429);
 
       expect(response.body.error).toContain('All models exhausted');
-      expect(response.body.model).toBe('gemini-2.5-flash');
+      expect(response.body.model).toBe('gemini-2.5-flash-medium');
     });
   });
 });

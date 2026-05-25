@@ -25,6 +25,7 @@ export async function callLlmLive(options: CallLlmOptions): Promise<CallLlmResul
       throw error;
     }
 
+    console.log('[live-call] Transient error, retrying callLlm in 3s…');
     await sleep(3_000);
     return callLlm(options);
   }
@@ -41,6 +42,7 @@ export async function callLlmAgentLive(
       throw error;
     }
 
+    console.log('[live-call] Transient error, retrying callLlmAgent in 3s…');
     await sleep(3_000);
     return callLlmAgent(options);
   }
