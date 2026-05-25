@@ -180,7 +180,17 @@ Per-turn `model` on exported `assistant` / `tool` lines comes from `AgentStep.mo
 
 Result metadata: `speedTierRequested`, `speedTierUsed`, `speedTierDowngraded`, `modelsAttempted`, `modelSelectedBy`, `registryKey`.
 
-Capability filters: `tools` → `requireFunctionCalling`; `structuredOutput` → `requireStructuredOutput`.
+Specialist capability labels (set per catalog row in `shared/gemini-types.ts`):
+
+| Label | Field | Failover filter |
+|-------|-------|-----------------|
+| tools | `supportsFunctionCalling` | `requireFunctionCalling` |
+| web search | `supportsWebSearch` | `requireWebSearch` |
+| code execution | `supportsCodeExecution` | `requireCodeExecution` |
+| structured JSON | `supportsStructuredOutput` or `supportsStrictJson` | `requireStructuredOutput` |
+| strict JSON | `supportsStrictJson` | `requireStrictJson` |
+
+Groq strict JSON uses `response_format: { type: 'json_schema', json_schema: { strict: true, ... } }` (see `server/groq/generate.ts`).
 
 ---
 
@@ -206,7 +216,7 @@ Capability filters: `tools` → `requireFunctionCalling`; `structuredOutput` →
 |--------|--------|------|
 | API | `generateContent` + `Content[]` | `chat.completions` |
 | Thinking | `buildThinkingConfig` from `bakedThinkingPower` | Not used (`thinkingUsed: false`) |
-| Structured output | JSON schema / OpenAPI schema | `response_format: json_object` only |
+| Structured output | JSON schema / OpenAPI schema | `json_schema` (`strict: true` on GPT-OSS) or `json_object` fallback |
 | Tools | `functionDeclarations` + `toolConfig` | OpenAI `tools` + `tool_choice` |
 | Thread growth | Native model `content` parts | Assistant message + tool messages |
 | Env | `GEMINI_API_KEY` | `GROQ_API_KEY` |

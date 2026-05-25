@@ -1,6 +1,28 @@
 # Landscape Display — React migration guide
 
-Copy this entire `packages/landscape-display` folder into your React + Vite + TypeScript project (e.g. `src/lib/landscape-display/`).
+In **Lost History** this module lives at [`src/landscape-display/`](../landscape-display/). For other projects, copy the folder into `src/landscape-display/` (or `src/lib/landscape-display/`).
+
+## Game embedding (Lost History)
+
+Use **`LandscapePanel`** + **`LandscapeSceneController`** — not raw `LandscapeScene`.
+
+```tsx
+import { LandscapePanel } from '../landscape-display/react/LandscapePanel';
+import type { LandscapeSceneSnapshot } from '../landscape-display/api/types';
+
+const snapshot: LandscapeSceneSnapshot = {
+  backgroundUrl: '/landscapes/default.svg',
+  objects: [/* PlacedObjectInput[] */],
+};
+
+<LandscapePanel snapshot={snapshot} onReady={(c) => { /* imperative API */ }} />
+```
+
+- Frozen physics: `LANDSCAPE_SCENE_CONSTANTS` (`humanHeight`, distances) — never change after init.
+- Mutable via controller: background, objects, viewer position, head look, sun, square resize.
+- Horizon: set once per mount (`horizonRatio` in snapshot or auto-detect); change only by remounting the panel or passing a new explicit ratio at create time.
+
+See [`api/LandscapeSceneController.ts`](api/LandscapeSceneController.ts) and [`react/LandscapePanel.tsx`](react/LandscapePanel.tsx).
 
 ## 1. Dependencies
 

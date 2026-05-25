@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LandscapeConfig } from './types';
+import type { LandscapeConfig } from './types.js';
 
 export class LandscapeScene {
     private scene!: THREE.Scene;

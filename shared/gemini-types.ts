@@ -22,6 +22,39 @@ export interface ModelRateLimitHints {
   rpd?: number;
 }
 
+/**
+ * Specialist routing labels (beyond speed tiers) that must be set explicitly for every catalog model.
+ * Used by tier failover (`requireFunctionCalling`, `requireStructuredOutput`, etc.).
+ *
+ * - `supportsFunctionCalling` — local/OpenAPI tools (`tools` on the request).
+ * - `supportsWebSearch` — provider built-in web search (e.g. Groq Compound).
+ * - `supportsCodeExecution` — provider built-in code execution (e.g. Groq Compound + E2B).
+ * - `supportsStructuredOutput` — best-effort JSON schema / JSON object mode.
+ * - `supportsStrictJson` — guaranteed schema adherence: Gemini `responseSchema` / JSON Schema;
+ *   Groq `response_format: { type: 'json_schema', json_schema: { strict: true, ... } }`.
+ */
+export interface ModelCapabilityLabels {
+  supportsThinking: boolean;
+  thinkingMode: ThinkingModeKind;
+  supportsFunctionCalling: boolean;
+  supportsWebSearch: boolean;
+  supportsCodeExecution: boolean;
+  supportsStructuredOutput: boolean;
+  supportsStrictJson: boolean;
+  freeTierAvailable: boolean;
+}
+
+/** One API model row before speed-tier assignment and thinking-variant probes. */
+export interface CatalogModelDefinition extends ModelCapabilityLabels {
+  id: string;
+  apiModelId: string;
+  displayName: string;
+  category: ModelCategory;
+  provider: LlmProvider;
+  rateLimitHints?: ModelRateLimitHints;
+  aliases?: string[];
+}
+
 export interface TextModelInfo {
   id: string;
   apiModelId: string;
@@ -36,8 +69,12 @@ export interface TextModelInfo {
   supportsThinking: boolean;
   thinkingMode: ThinkingModeKind;
   supportsFunctionCalling: boolean;
-  /** Gemini 3+ structured JSON output via responseSchema. */
+  supportsWebSearch: boolean;
+  supportsCodeExecution: boolean;
+  /** Best-effort structured JSON (Gemini 3+ schema; Groq `json_schema` with `strict: false` or JSON object mode). */
   supportsStructuredOutput: boolean;
+  /** Guaranteed schema match (Gemini 3+; Groq `json_schema.strict: true` on supported models). */
+  supportsStrictJson: boolean;
   freeTierAvailable: boolean;
   /** 1 = strongest within its speedTier. */
   strengthRank?: number;
@@ -48,7 +85,10 @@ export interface TextModelInfo {
 export interface GetModelsByTierOptions {
   preferFreeTier?: boolean;
   requireFunctionCalling?: boolean;
+  requireWebSearch?: boolean;
+  requireCodeExecution?: boolean;
   requireStructuredOutput?: boolean;
+  requireStrictJson?: boolean;
 }
 
 export type ChatRole = 'user' | 'assistant' | 'system' | 'tool';
@@ -206,6 +246,12 @@ export interface GenerateTextResult {
 
 export interface LlmCapabilityErrorDetails {
   model: string;
-  capability: 'functionCalling' | 'structuredOutput' | 'thinking';
+  capability:
+    | 'functionCalling'
+    | 'webSearch'
+    | 'codeExecution'
+    | 'structuredOutput'
+    | 'strictJson'
+    | 'thinking';
   message: string;
 }

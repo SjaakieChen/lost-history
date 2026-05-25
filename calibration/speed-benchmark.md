@@ -28,10 +28,6 @@ Runs per probe: 1
 | gemini-2.5-flash | low | budget | — | — | 0/1 |
 | gemini-2.5-flash | medium | budget | — | — | 0/1 |
 | gemini-2.5-flash | high | budget | — | — | 0/1 |
-| gemini-3-flash-preview | minimal | levels | — | — | 0/1 |
-| gemini-3-flash-preview | low | levels | — | — | 0/1 |
-| gemini-3-flash-preview | medium | levels | — | — | 0/1 |
-| gemini-3-flash-preview | high | levels | — | — | 0/1 |
 | gemini-3.5-flash | minimal | levels | — | — | 0/1 |
 | gemini-3.5-flash | low | levels | — | — | 0/1 |
 | gemini-3.5-flash | medium | levels | — | — | 0/1 |
@@ -40,6 +36,5 @@ Runs per probe: 1
 | gemini-2.5-pro | high | budget | — | — | 0/1 |
 | gemini-3.1-pro-preview | high | levels | — | — | 0/1 |
 | openai/gpt-oss-120b | off | none | — | — | 0/1 |
-| openai/gpt-oss-safeguard-20b | off | none | — | — | 0/1 |
 
 Set `SPEED_TIER_BOUNDS_MS` in `server/gemini/speed-tier-bounds.ts` from these results, then run `npm run assign:speed-tiers`.

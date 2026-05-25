@@ -12,7 +12,10 @@ export interface SpeedProbe {
   bakedThinkingPower: ThinkingPower;
   supportsThinking: boolean;
   supportsFunctionCalling: boolean;
+  supportsWebSearch: boolean;
+  supportsCodeExecution: boolean;
   supportsStructuredOutput: boolean;
+  supportsStrictJson: boolean;
   freeTierAvailable: boolean;
   rateLimitHints?: { rpm?: number; tpm?: number; rpd?: number };
   aliases?: string[];
@@ -68,7 +71,10 @@ export function buildProbeMatrix(): SpeedProbe[] {
         bakedThinkingPower,
         supportsThinking: base.supportsThinking,
         supportsFunctionCalling: base.supportsFunctionCalling,
+        supportsWebSearch: base.supportsWebSearch,
+        supportsCodeExecution: base.supportsCodeExecution,
         supportsStructuredOutput: base.supportsStructuredOutput,
+        supportsStrictJson: base.supportsStrictJson,
         freeTierAvailable: base.freeTierAvailable,
         rateLimitHints: base.rateLimitHints,
         aliases:

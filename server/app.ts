@@ -6,9 +6,13 @@ import {
   listTextModels,
   GeminiQuotaError,
   LlmCapabilityError,
+  AgentMaxStepsError,
 } from './gemini.js';
-import type { CallLlmOptions } from '../shared/gemini-types.js';
+import { debugSessionLog } from './debug-session-log.js';
+import type { CallLlmOptions, ChatMessage, SpeedTier } from '../shared/gemini-types.js';
+import type { LandscapeSceneState } from '../shared/scene-agent-types.js';
 import type { GenerateTextOptions } from './gemini/generate-text.js';
+import { runSceneAgent } from './scene/run-scene-agent.js';
 
 export function createApp() {
   const app = express();
@@ -65,6 +69,104 @@ export function createApp() {
       }
 
       const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: message });
+    }
+  });
+
+  app.post('/api/scene-agent', async (req, res) => {
+    try {
+      const body = req.body as {
+        prompt?: string;
+        messages?: ChatMessage[];
+        model?: string;
+        speedTier?: SpeedTier;
+        sceneState: LandscapeSceneState;
+        maxSteps?: number;
+      };
+
+      if (!body.sceneState) {
+        res.status(400).json({ error: 'sceneState is required.' });
+        return;
+      }
+
+      if (!body.prompt?.trim() && !body.messages?.length) {
+        res.status(400).json({ error: 'prompt or messages are required.' });
+        return;
+      }
+
+      const result = await runSceneAgent({
+        prompt: body.prompt,
+        messages: body.messages,
+        model: body.model,
+        speedTier: body.speedTier,
+        sceneState: body.sceneState,
+        maxSteps: body.maxSteps,
+      });
+
+      res.json(result);
+    } catch (error) {
+      if (error instanceof LlmCapabilityError) {
+        // #region agent log
+        debugSessionLog('app.ts:scene-agent', 'capability error', {
+          model: error.model,
+          capability: error.capability,
+          message: error.message,
+        }, 'B');
+        // #endregion
+        res.status(400).json({
+          error: error.message,
+          model: error.model,
+          capability: error.capability,
+        });
+        return;
+      }
+
+      if (error instanceof GeminiQuotaError) {
+        // #region agent log
+        debugSessionLog('app.ts:scene-agent', 'quota error', {
+          model: error.model,
+          failureKind: error.failureKind,
+          blockedModels: error.blockedModels,
+        }, 'D');
+        // #endregion
+        const retryAfterSec = error.retryAfterMs
+          ? Math.ceil(error.retryAfterMs / 1000)
+          : undefined;
+        res.status(429).json({
+          error: error.message,
+          model: error.model,
+          registryKey: error.model,
+          failureKind: error.failureKind,
+          blockedModels: error.blockedModels,
+          ...(retryAfterSec !== undefined
+            ? { retryAfterSec, retryAfterMs: error.retryAfterMs }
+            : {}),
+        });
+        return;
+      }
+
+      if (error instanceof AgentMaxStepsError) {
+        // #region agent log
+        debugSessionLog('app.ts:scene-agent', 'max steps', {
+          message: error.message,
+          steps: error.steps.length,
+        }, 'E');
+        // #endregion
+        res.status(500).json({
+          error: error.message,
+          failureKind: 'max_steps',
+          stepCount: error.steps.length,
+        });
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      // #region agent log
+      debugSessionLog('app.ts:scene-agent', 'unhandled error', {
+        message,
+        name: error instanceof Error ? error.name : 'unknown',
+      }, 'E');
+      // #endregion
       res.status(500).json({ error: message });
     }
   });

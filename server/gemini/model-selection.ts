@@ -28,7 +28,10 @@ function toResolved(model: ResolvedTextModel['info'], tier: SpeedTier): Resolved
 
 export interface ModelCandidateOptions {
   requireFunctionCalling?: boolean;
+  requireWebSearch?: boolean;
+  requireCodeExecution?: boolean;
   requireStructuredOutput?: boolean;
+  requireStrictJson?: boolean;
   preferFreeTier?: boolean;
 }
 
@@ -41,7 +44,10 @@ export function collectCandidatesForSpeedTier(
   const filterOptions = {
     preferFreeTier: candidateOptions?.preferFreeTier ?? true,
     requireFunctionCalling: candidateOptions?.requireFunctionCalling,
+    requireWebSearch: candidateOptions?.requireWebSearch,
+    requireCodeExecution: candidateOptions?.requireCodeExecution,
     requireStructuredOutput: candidateOptions?.requireStructuredOutput,
+    requireStrictJson: candidateOptions?.requireStrictJson,
   };
 
   const models = getModelsBySpeedTier(tier, filterOptions);

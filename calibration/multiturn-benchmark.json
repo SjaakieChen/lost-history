@@ -184,62 +184,6 @@
       ]
     },
     {
-      "probeKey": "gemini-3-flash-minimal",
-      "apiModelId": "gemini-3-flash-preview",
-      "bakedThinkingPower": "minimal",
-      "thinkingMode": "levels",
-      "runs": [
-        {
-          "totalMs": 203,
-          "stepCount": 0,
-          "ok": false,
-          "error": "Gemini daily quota exhausted (RPD) for \"gemini-3-flash-minimal\". Retry after ~44s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You exceeded…"
-        }
-      ]
-    },
-    {
-      "probeKey": "gemini-3-flash-low",
-      "apiModelId": "gemini-3-flash-preview",
-      "bakedThinkingPower": "low",
-      "thinkingMode": "levels",
-      "runs": [
-        {
-          "totalMs": 49,
-          "stepCount": 0,
-          "ok": false,
-          "error": "Gemini daily quota exhausted (RPD) for \"gemini-3-flash-low\". Retry after ~44s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You exceeded you…"
-        }
-      ]
-    },
-    {
-      "probeKey": "gemini-3-flash-medium",
-      "apiModelId": "gemini-3-flash-preview",
-      "bakedThinkingPower": "medium",
-      "thinkingMode": "levels",
-      "runs": [
-        {
-          "totalMs": 48,
-          "stepCount": 0,
-          "ok": false,
-          "error": "Gemini daily quota exhausted (RPD) for \"gemini-3-flash-medium\". Retry after ~44s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You exceeded …"
-        }
-      ]
-    },
-    {
-      "probeKey": "gemini-3-flash-high",
-      "apiModelId": "gemini-3-flash-preview",
-      "bakedThinkingPower": "high",
-      "thinkingMode": "levels",
-      "runs": [
-        {
-          "totalMs": 36,
-          "stepCount": 0,
-          "ok": false,
-          "error": "Gemini daily quota exhausted (RPD) for \"gemini-3-flash-high\". Retry after ~44s. Free tier limits are strict — wait and retry, or switch models. Details: {\"error\":{\"code\":429,\"message\":\"You exceeded yo…"
-        }
-      ]
-    },
-    {
       "probeKey": "gemini-3.5-flash-minimal",
       "apiModelId": "gemini-3.5-flash",
       "bakedThinkingPower": "minimal",
@@ -384,24 +328,6 @@
       ],
       "p50TotalMs": 4119,
       "p95TotalMs": 4119
-    },
-    {
-      "probeKey": "openai--gpt-oss-safeguard-20b-off",
-      "apiModelId": "openai/gpt-oss-safeguard-20b",
-      "bakedThinkingPower": "off",
-      "thinkingMode": "none",
-      "runs": [
-        {
-          "totalMs": 4214,
-          "step1Ms": 315,
-          "step2Ms": 2166,
-          "step3Ms": 1732,
-          "stepCount": 3,
-          "ok": true
-        }
-      ],
-      "p50TotalMs": 4214,
-      "p95TotalMs": 4214
     },
     {
       "probeKey": "qwen--qwen3-32b-off",

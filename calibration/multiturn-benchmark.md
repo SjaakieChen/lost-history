@@ -10,7 +10,6 @@ Runs per probe: 1
 | llama-3.3-70b-versatile | off | 4145 | 189 | 1999 | 1956 | 1/1 |
 | llama-3.1-8b-instant | off | 4174 | 212 | 2063 | 1899 | 1/1 |
 | meta-llama/llama-4-scout-17b-16e-instruct | off | 4178 | 153 | 2020 | 2004 | 1/1 |
-| openai/gpt-oss-safeguard-20b | off | 4214 | 315 | 2166 | 1732 | 1/1 |
 | openai/gpt-oss-120b | off | 4232 | 267 | 1987 | 1977 | 1/1 |
 | qwen/qwen3-32b | off | 4718 | 926 | 1646 | 2145 | 1/1 |
 | gemini-3.1-flash-lite | minimal | 5020 | 531 | 774 | 3715 | 1/1 |
@@ -25,10 +24,6 @@ Runs per probe: 1
 | gemini-2.5-flash | low | — | — | — | — | 0/1 |
 | gemini-2.5-flash | medium | — | — | — | — | 0/1 |
 | gemini-2.5-flash | high | — | — | — | — | 0/1 |
-| gemini-3-flash-preview | minimal | — | — | — | — | 0/1 |
-| gemini-3-flash-preview | low | — | — | — | — | 0/1 |
-| gemini-3-flash-preview | medium | — | — | — | — | 0/1 |
-| gemini-3-flash-preview | high | — | — | — | — | 0/1 |
 | gemini-3.5-flash | minimal | — | — | — | — | 0/1 |
 | gemini-3.5-flash | low | — | — | — | — | 0/1 |
 | gemini-3.5-flash | medium | — | — | — | — | 0/1 |

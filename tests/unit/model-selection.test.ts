@@ -77,7 +77,13 @@ describe('iterateModelCandidates', () => {
     ].map((c) => c.registryKey);
 
     expect(ids).toContain('gemini-3.1-flash-lite-minimal');
-    expect(ids.every((id) => TEXT_MODEL_REGISTRY[id].supportsStructuredOutput)).toBe(true);
+    expect(
+      ids.every(
+        (id) =>
+          TEXT_MODEL_REGISTRY[id].supportsStructuredOutput ||
+          TEXT_MODEL_REGISTRY[id].supportsStrictJson,
+      ),
+    ).toBe(true);
   });
 
   it('includes slower tiers after slow tier candidates when starting at slow', () => {
@@ -114,6 +120,6 @@ describe('iterateSpeedTierBatches', () => {
   });
 
   it('yields nothing for explicit model', () => {
-    expect([...iterateSpeedTierBatches({ model: 'gemini-3-flash' })]).toHaveLength(0);
+    expect([...iterateSpeedTierBatches({ model: 'gemini-3.5-flash' })]).toHaveLength(0);
   });
 });

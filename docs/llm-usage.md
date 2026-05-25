@@ -216,7 +216,32 @@ Does **not** accept: `tools`, `structuredOutput`, `functionCallingMode`.
 
 Returns `{ models: TextModelInfo[] }` — ids, `speedTier`, capabilities, `bakedThinkingPower`, `strengthRank`, etc.
 
+### `POST /api/scene-agent`
+
+Scene manipulation agent for the game UI. Uses `callLlmAgent` with a **catalog-only** tool set (models pick `catalogId` from `list_available_objects`; they cannot submit voxel data).
+
+**Body:**
+
+| Field | Required | Notes |
+|-------|----------|-------|
+| `sceneState` | yes | `LandscapeSceneState` — background, instances, viewer, sun |
+| `prompt` or `messages` | one required | Same as other LLM routes |
+| `model` | no | Registry id; must support function calling |
+| `speedTier` | no | Default `moderate` if `model` omitted |
+| `maxSteps` | no | Default 12 |
+
+**Response:** `CallLlmAgentResult` plus `sceneState` (updated after tool handlers run on the server).
+
+Types: [`shared/scene-agent-types.ts`](../shared/scene-agent-types.ts), catalog: [`shared/scene-catalog.ts`](../shared/scene-catalog.ts).
+
+```bash
+curl -s http://localhost:3001/api/scene-agent \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"Place a red candle at depth 15m","model":"gemini-2.5-flash-lite-off","sceneState":{"backgroundUrl":"/landscapes/default.svg","instances":[],"viewer":{"positionX":0,"headYaw":0,"headPitch":0},"sun":{"azimuth":180,"elevation":45}}}'
+```
+
 ---
+
 
 ## Failure handling (summary)
 

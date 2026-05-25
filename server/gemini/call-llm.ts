@@ -621,6 +621,9 @@ export async function callLlm(options: InternalCallLlmOptions): Promise<Internal
       }
       handleRecoverableFailure(preferredCandidate, error, exhaustionCtx);
       usedPreferredFailover = true;
+      // #region agent log
+      fetch('http://127.0.0.1:7631/ingest/130840d0-116a-49e4-9207-dfd55fe50a73',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b534ab'},body:JSON.stringify({sessionId:'b534ab',location:'call-llm.ts:preferredFailover',message:'preferred model failed, failing over in tier',data:{preferredRegistryKey:preferredCandidate.registryKey,preferredTier:preferredCandidate.info.speedTier,failureKind:error instanceof Error?error.name:'unknown'},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
     }
   }
 
@@ -673,7 +676,7 @@ export async function callLlm(options: InternalCallLlmOptions): Promise<Internal
       }
 
       try {
-        return await executeResolvedCall(
+        const result = await executeResolvedCall(
           candidate,
           options,
           requestConfig,
@@ -684,6 +687,16 @@ export async function callLlm(options: InternalCallLlmOptions): Promise<Internal
           },
           exhaustionCtx,
         );
+        if (
+          options.model?.trim() &&
+          preferredCandidate &&
+          result.registryKey !== preferredCandidate.registryKey
+        ) {
+          // #region agent log
+          fetch('http://127.0.0.1:7631/ingest/130840d0-116a-49e4-9207-dfd55fe50a73',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b534ab'},body:JSON.stringify({sessionId:'b534ab',location:'call-llm.ts:tierWinner',message:'model switched from requested',data:{requestedRegistryKey:preferredCandidate.registryKey,winnerRegistryKey:result.registryKey,modelSelectedBy:result.modelSelectedBy,modelsAttempted:result.modelsAttempted,usedPreferredFailover},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+          // #endregion
+        }
+        return result;
       } catch (error) {
         lastError = error;
 

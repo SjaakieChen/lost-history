@@ -1,6 +1,10 @@
 import type OpenAI from 'openai';
-import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions.js';
-import type { CallLlmOptions, GenerateTextUsage, LlmFunctionCall } from '../../shared/gemini-types.js';
+import type {
+  ChatCompletionCreateParamsNonStreaming,
+  ChatCompletionMessageParam,
+  ChatCompletionTool,
+} from 'openai/resources/chat/completions.js';
+import type { CallLlmOptions, GenerateTextUsage, LlmFunctionCall, TextModelInfo } from '../../shared/gemini-types.js';
 import type { ExhaustionContext } from '../gemini/availability.js';
 import type { ResolvedTextModel } from '../gemini/models.js';
 import { withRateLimitAndRetry, isQuotaOrRateLimitError } from '../gemini/rate-limit.js';
@@ -65,6 +69,59 @@ function resolveToolChoice(
   return 'auto';
 }
 
+function resolveStructuredSchema(
+  structuredOutput: CallLlmOptions['structuredOutput'],
+): Record<string, unknown> | undefined {
+  if (!structuredOutput) {
+    return undefined;
+  }
+  const schema = structuredOutput.responseJsonSchema ?? structuredOutput.responseSchema;
+  if (!schema || typeof schema !== 'object') {
+    return undefined;
+  }
+  return schema as Record<string, unknown>;
+}
+
+/** Maps `structuredOutput` to Groq `response_format` (strict JSON schema when supported). */
+export function buildGroqResponseFormat(
+  options: CallLlmOptions,
+  info: Pick<TextModelInfo, 'supportsStructuredOutput' | 'supportsStrictJson'>,
+): ChatCompletionCreateParamsNonStreaming['response_format'] | undefined {
+  if (!options.structuredOutput) {
+    return undefined;
+  }
+
+  const schema = resolveStructuredSchema(options.structuredOutput);
+
+  if (info.supportsStrictJson && schema) {
+    return {
+      type: 'json_schema',
+      json_schema: {
+        name: 'structured_output',
+        strict: true,
+        schema,
+      },
+    };
+  }
+
+  if (info.supportsStructuredOutput && schema) {
+    return {
+      type: 'json_schema',
+      json_schema: {
+        name: 'structured_output',
+        strict: false,
+        schema,
+      },
+    };
+  }
+
+  if (info.supportsStructuredOutput || info.supportsStrictJson) {
+    return { type: 'json_object' };
+  }
+
+  return undefined;
+}
+
 export async function generateWithGroq(
   resolved: ResolvedTextModel,
   options: CallLlmOptions,
@@ -85,7 +142,7 @@ export async function generateWithGroq(
         max_tokens: options.maxOutputTokens,
         tools: tools?.length ? tools : undefined,
         tool_choice: resolveToolChoice(options, tools),
-        response_format: options.structuredOutput ? { type: 'json_object' } : undefined,
+        response_format: buildGroqResponseFormat(options, info),
       }),
     exhaustionCtx,
   );

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Voxel } from './types';
+import type { Voxel } from './types.js';
 
 /**
  * Creates a mesh group from voxel data.

@@ -35,7 +35,10 @@ function buildRegistry(): Record<string, TextModelInfo> {
       supportsThinking: probe.supportsThinking,
       thinkingMode: probe.thinkingMode,
       supportsFunctionCalling: probe.supportsFunctionCalling,
+      supportsWebSearch: probe.supportsWebSearch,
+      supportsCodeExecution: probe.supportsCodeExecution,
       supportsStructuredOutput: probe.supportsStructuredOutput,
+      supportsStrictJson: probe.supportsStrictJson,
       freeTierAvailable: probe.freeTierAvailable,
       rateLimitHints: probe.rateLimitHints,
       aliases: probe.aliases,
@@ -120,7 +123,10 @@ const REGISTRY_WITHOUT_RANKS = (() => {
       supportsThinking: probe.supportsThinking,
       thinkingMode: probe.thinkingMode,
       supportsFunctionCalling: probe.supportsFunctionCalling,
+      supportsWebSearch: probe.supportsWebSearch,
+      supportsCodeExecution: probe.supportsCodeExecution,
       supportsStructuredOutput: probe.supportsStructuredOutput,
+      supportsStrictJson: probe.supportsStrictJson,
       freeTierAvailable: probe.freeTierAvailable,
       rateLimitHints: probe.rateLimitHints,
       aliases: probe.aliases,
@@ -161,7 +167,13 @@ export interface ResolvedTextModel {
   tier: SpeedTier;
 }
 
-export type LlmCapability = 'functionCalling' | 'structuredOutput' | 'thinking';
+export type LlmCapability =
+  | 'functionCalling'
+  | 'webSearch'
+  | 'codeExecution'
+  | 'structuredOutput'
+  | 'strictJson'
+  | 'thinking';
 
 export class LlmCapabilityError extends Error {
   readonly model: string;
@@ -175,10 +187,17 @@ export class LlmCapabilityError extends Error {
   }
 }
 
+export function supportsStructuredOutputCapability(info: TextModelInfo): boolean {
+  return info.supportsStructuredOutput || info.supportsStrictJson;
+}
+
 export function assertCapability(info: TextModelInfo, capability: LlmCapability): void {
   const checks: Record<LlmCapability, boolean> = {
     functionCalling: info.supportsFunctionCalling,
-    structuredOutput: info.supportsStructuredOutput,
+    webSearch: info.supportsWebSearch,
+    codeExecution: info.supportsCodeExecution,
+    structuredOutput: supportsStructuredOutputCapability(info),
+    strictJson: info.supportsStrictJson,
     thinking: info.supportsThinking,
   };
 
@@ -237,7 +256,10 @@ export function resolveTextModel(model?: string): ResolvedTextModel {
       supportsThinking: !isGroq && thinkingMode !== 'none',
       thinkingMode,
       supportsFunctionCalling: isGroq ? false : true,
+      supportsWebSearch: false,
+      supportsCodeExecution: false,
       supportsStructuredOutput: isGroq ? false : /gemini-3/.test(requested),
+      supportsStrictJson: isGroq ? false : /gemini-3/.test(requested),
       freeTierAvailable: true,
     },
   };
@@ -256,7 +278,16 @@ function filterModelsByOptions(
     if (options?.requireFunctionCalling && !model.supportsFunctionCalling) {
       return false;
     }
-    if (options?.requireStructuredOutput && !model.supportsStructuredOutput) {
+    if (options?.requireWebSearch && !model.supportsWebSearch) {
+      return false;
+    }
+    if (options?.requireCodeExecution && !model.supportsCodeExecution) {
+      return false;
+    }
+    if (options?.requireStructuredOutput && !supportsStructuredOutputCapability(model)) {
+      return false;
+    }
+    if (options?.requireStrictJson && !model.supportsStrictJson) {
       return false;
     }
     return true;

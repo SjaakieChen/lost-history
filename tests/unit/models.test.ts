@@ -7,6 +7,7 @@ import {
   resolveModelForSpeedTier,
   resolveTextModel,
   SPEED_TIER_MODEL_ORDER,
+  supportsStructuredOutputCapability,
   TEXT_MODEL_REGISTRY,
 } from '../../server/gemini/models.js';
 import type { TextModelInfo } from '../../shared/gemini-types.js';
@@ -18,16 +19,10 @@ describe('resolveTextModel', () => {
     expect(resolved.apiModelId).toBe('gemini-2.5-flash-lite');
   });
 
-  it('resolves alias to canonical registry key', () => {
-    const resolved = resolveTextModel('gemini-3.1-flash-lite-preview');
-    expect(resolved.registryKey).toBe('gemini-3.1-flash-lite-medium');
-    expect(resolved.apiModelId).toBe('gemini-3.1-flash-lite');
-  });
-
-  it('resolves apiModelId when different from registry id', () => {
-    const resolved = resolveTextModel('gemini-3-flash');
-    expect(resolved.registryKey).toBe('gemini-3-flash-medium');
-    expect(resolved.apiModelId).toBe('gemini-3-flash-preview');
+  it('resolves base id to medium variant for gemini-3.5-flash', () => {
+    const resolved = resolveTextModel('gemini-3.5-flash');
+    expect(resolved.registryKey).toBe('gemini-3.5-flash-medium');
+    expect(resolved.apiModelId).toBe('gemini-3.5-flash');
   });
 
   it('throws when model id is empty', () => {
@@ -40,6 +35,7 @@ describe('resolveTextModel', () => {
     expect(resolved.registryKey).toBe('gemini-3-unknown-test');
     expect(resolved.info.thinkingMode).toBe('levels');
     expect(resolved.info.supportsStructuredOutput).toBe(true);
+    expect(resolved.info.supportsStrictJson).toBe(true);
     expect(resolved.info.supportsThinking).toBe(true);
     expect(resolved.info.speedTier).toBe('moderate');
     expect(resolved.info.bakedThinkingPower).toBe('medium');
@@ -112,7 +108,17 @@ describe('getModelsBySpeedTier', () => {
     const ids = getModelsBySpeedTier('instant', { requireStructuredOutput: true }).map(
       (m) => m.id,
     );
-    expect(ids.every((id) => TEXT_MODEL_REGISTRY[id].supportsStructuredOutput)).toBe(true);
+    expect(ids.every((id) => supportsStructuredOutputCapability(TEXT_MODEL_REGISTRY[id]))).toBe(
+      true,
+    );
+    expect(ids).toContain('gemini-3.1-flash-lite-minimal');
+  });
+
+  it('filters to strict-json capable models only', () => {
+    const ids = getModelsBySpeedTier('instant', { requireStrictJson: true }).map((m) => m.id);
+    expect(ids.length).toBeGreaterThan(0);
+    expect(ids.every((id) => TEXT_MODEL_REGISTRY[id].supportsStrictJson)).toBe(true);
+    expect(ids).toContain('openai--gpt-oss-20b-off');
     expect(ids).toContain('gemini-3.1-flash-lite-minimal');
   });
 

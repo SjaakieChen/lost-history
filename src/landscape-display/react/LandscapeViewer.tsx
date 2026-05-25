@@ -5,17 +5,12 @@ import { LandscapeScene } from '../LandscapeScene';
 import { createVoxelMesh } from '../VoxelBuilder';
 import { exampleVoxelData } from '../example-voxel-data';
 import { detectHorizonRatio } from '../horizonDetector';
+import type { PlacedObjectSpec } from '../api/types.js';
 import type { Voxel } from '../types';
 
 const FALLBACK_HORIZON_RATIO = 0.25;
 
-export interface PlacedObjectSpec {
-    voxels: Voxel[];
-    heightMeters: number;
-    x: number;
-    depth: number;
-    elevation: number;
-}
+export type { PlacedObjectSpec };
 
 export interface LandscapeViewerProps {
     backgroundUrl: string;

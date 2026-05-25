@@ -139,7 +139,7 @@ describe('resolveCallModel', () => {
   });
 
   it('returns explicit model registry key', () => {
-    expect(resolveCallModel({ model: 'gemini-3-flash' })).toBe('gemini-3-flash-medium');
+    expect(resolveCallModel({ model: 'gemini-3.5-flash' })).toBe('gemini-3.5-flash-medium');
   });
 
   it('returns strongest moderate tier default when speedTier is moderate', () => {

@@ -30,6 +30,25 @@ describe('Groq models registry', () => {
     expect(compound.info.supportsFunctionCalling).toBe(false);
   });
 
+  it('does not register removed safeguard or orpheus models', () => {
+    const ids = listGroqTextModels().map((m) => m.apiModelId);
+    expect(ids.some((id) => id.includes('safeguard'))).toBe(false);
+    expect(ids.some((id) => id.includes('orpheus'))).toBe(false);
+  });
+
+  it('tags compound with built-in web search and code execution', () => {
+    const compound = resolveTextModel('groq--compound-off');
+    expect(compound.info.supportsWebSearch).toBe(true);
+    expect(compound.info.supportsCodeExecution).toBe(true);
+    expect(compound.info.supportsStrictJson).toBe(false);
+  });
+
+  it('tags gpt-oss models with strict JSON support', () => {
+    const oss20 = resolveTextModel('openai--gpt-oss-20b-off');
+    expect(oss20.info.supportsStrictJson).toBe(true);
+    expect(oss20.info.supportsStructuredOutput).toBe(true);
+  });
+
   it('includes Groq probes in calibration matrix', () => {
     const groqProbeCount = listGroqTextModels().length;
     const groqProbes = buildProbeMatrix().filter((p) => p.provider === 'groq');

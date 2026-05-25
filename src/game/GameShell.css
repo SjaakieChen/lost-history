@@ -1,0 +1,207 @@
+.game-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+.game-shell__header h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.75rem;
+}
+
+.game-shell__header p {
+  margin: 0 0 1.25rem;
+  color: #555;
+}
+
+.game-shell__layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 768px) {
+  .game-shell__layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.game-shell__panel-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.game-shell__viewport {
+  min-width: 0;
+}
+
+.game-shell__landscape-error {
+  margin: 0 0 0.5rem;
+  color: #a11;
+  font-size: 0.875rem;
+}
+
+.game-shell__chat {
+  min-width: 0;
+}
+
+.game-shell__chat .prompt-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.game-shell__chat .prompt-form label {
+  font-weight: 600;
+}
+
+.game-shell__chat .prompt-form textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font: inherit;
+  resize: vertical;
+}
+
+.game-shell__chat .prompt-form button {
+  align-self: flex-start;
+  padding: 0.65rem 1.25rem;
+  border: none;
+  border-radius: 8px;
+  background: #2c4a6e;
+  color: white;
+  font: inherit;
+  cursor: pointer;
+}
+
+.game-shell__chat .prompt-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.game-shell__chat .error {
+  margin-top: 1rem;
+  color: #a11;
+}
+
+.game-shell__chat .response {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 8px;
+  background: white;
+  border: 1px solid #ddd;
+}
+
+.game-shell__chat .response h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.game-shell__chat .response p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.scene-agent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.scene-agent__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.scene-agent__controls select {
+  padding: 0.5rem;
+  font: inherit;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+.scene-agent__form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.scene-agent__form textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font: inherit;
+  resize: vertical;
+}
+
+.scene-agent__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.scene-agent__actions button {
+  padding: 0.65rem 1rem;
+  border: none;
+  border-radius: 8px;
+  background: #2c4a6e;
+  color: white;
+  font: inherit;
+  cursor: pointer;
+}
+
+.scene-agent__actions button.secondary {
+  background: #e8e8e8;
+  color: #222;
+}
+
+.scene-agent__actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.scene-agent__meta {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.scene-agent__tools-toggle {
+  background: none;
+  border: none;
+  color: #2c4a6e;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.scene-agent__steps {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  font-size: 0.8rem;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.scene-agent__step-model {
+  color: #666;
+  font-weight: normal;
+}
+
+.scene-agent__call,
+.scene-agent__result {
+  margin: 0.25rem 0;
+  padding: 0.35rem 0.5rem;
+  background: #f4f4f4;
+  border-radius: 4px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

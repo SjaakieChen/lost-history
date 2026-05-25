@@ -8,6 +8,7 @@ export {
   resolveModelForSpeedTier,
   GeminiQuotaError,
   LlmCapabilityError,
+  AgentMaxStepsError,
 } from './gemini/index.js';
 
 export { LlmSession } from './llm/session.js';

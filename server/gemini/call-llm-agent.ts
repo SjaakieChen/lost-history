@@ -550,6 +550,9 @@ export async function callLlmAgent(options: CallLlmAgentOptions): Promise<CallLl
 
 
   const baseMessages = collectBaseMessages(options);
+  // #region agent log
+  fetch('http://127.0.0.1:7631/ingest/130840d0-116a-49e4-9207-dfd55fe50a73',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b534ab'},body:JSON.stringify({sessionId:'b534ab',location:'call-llm-agent.ts:start',message:'callLlmAgent start',data:{requestedModel:options.model??null,promptLen:options.prompt?.trim().length??0,baseMessagesLen:baseMessages.length,toolRoles:baseMessages.map(m=>m.role),hasToolMessages:baseMessages.some(m=>m.role==='tool')},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+  // #endregion
 
   const systemInstruction = buildAgentSystemInstruction(
 
