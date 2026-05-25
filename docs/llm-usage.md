@@ -122,6 +122,18 @@ Extends `CallLlmResult` with `terminationReason`, `steps`, `stepCount`, and **`m
 
 Not exposed over HTTP; call from server code only.
 
+### Agent conventions (verify before finish)
+
+`callLlmAgent` appends standard instructions to your `systemInstruction`:
+
+1. **Wait for tool results** — do not treat a turn as complete until mutation tools have returned; read `ok` / `error` in the tool message on the next step.
+2. **Retry on failure** — if a handler returns `ok: false` or `error`, fix arguments or use another tool before finishing.
+3. **`submit_final_answer` last** — only after intended mutations succeeded and outcomes were verified (re-list or re-read state when unsure).
+
+The default `submit_final_answer` tool description reinforces this. Scene-specific wording lives in `SCENE_AGENT_SYSTEM_INSTRUCTION` (`server/scene/scene-agent-tools.ts`).
+
+Handlers should return structured success/failure (`{ ok: true }` / `{ ok: false, error: '...' }` or `{ error: '...' }`) so the model can tell whether to retry.
+
 ---
 
 ## `LlmSession`
@@ -225,12 +237,16 @@ Scene manipulation agent for the game UI. Uses `callLlmAgent` with a **catalog-o
 | Field | Required | Notes |
 |-------|----------|-------|
 | `sceneState` | yes | `LandscapeSceneState` — background, instances, viewer, sun |
-| `prompt` or `messages` | one required | Same as other LLM routes |
-| `model` | no | Registry id; must support function calling |
+| `prompt` or `messages` | one required | For follow-ups, send full `messages` including the new user turn (the UI appends the latest instruction before each request) |
+| `model` | no | Registry id (e.g. `gemini-2.5-flash-lite-off`, `openai--gpt-oss-120b-off`); must support **local** function calling |
 | `speedTier` | no | Default `moderate` if `model` omitted |
 | `maxSteps` | no | Default 12 |
 
-**Response:** `CallLlmAgentResult` plus `sceneState` (updated after tool handlers run on the server).
+**Response:** `CallLlmAgentResult` plus `sceneState` (updated after tool handlers run on the server). Check `registryKey` / `modelsAttempted` if the served model differs from the one selected in the UI.
+
+**Models:** `GET /api/models` lists every registry entry. The game dropdown shows function-calling models only. **Groq Compound** (`groq--compound-off`, `groq--compound-mini-off`) appears as disabled — they use Groq built-in web/code tools, not scene catalog tools (`supportsFunctionCalling: false` in `server/groq/models-base.ts`).
+
+**Verify-before-finish:** the scene system prompt requires reading each tool result, retrying on `error` / `ok: false`, calling `list_placed_instances` to confirm placements/moves, then `submit_final_answer`. See `SCENE_AGENT_SYSTEM_INSTRUCTION` in `server/scene/scene-agent-tools.ts`.
 
 Types: [`shared/scene-agent-types.ts`](../shared/scene-agent-types.ts), catalog: [`shared/scene-catalog.ts`](../shared/scene-catalog.ts).
 
@@ -262,3 +278,5 @@ See [llm-internals.md](./llm-internals.md#failure-policy-and-failover) for full 
 | Expect `/api/chat` to run tools or JSON schema | Use `/api/llm` or `callLlm` |
 | Assume HTTP remembers chat | No session DB — resend `messages` or use `LlmSession` server-side |
 | Parse internal thread state from HTTP | Not exposed; use `messages` / `exportMessages` |
+| Use Groq Compound for scene placement | No local function calling — pick an FC-capable Groq/Gemini model |
+| Call `submit_final_answer` right after a mutation | Wait for tool result, verify state, retry on failure |

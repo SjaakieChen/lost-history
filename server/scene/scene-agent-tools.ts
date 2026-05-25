@@ -23,7 +23,12 @@ Rules:
 - Only place objects using catalogId values returned by list_available_objects.
 - Each placed object needs a unique instanceId (e.g. candle_1).
 - Use get_placement_limit(depth) before placing far from center.
-- When finished, call submit_final_answer with a short summary of what you changed.`;
+
+Tool workflow (required):
+- After place_instance, move_instance, remove_instance, or other mutations, read the tool result on the next turn.
+- If the tool returns ok: false or error, fix the issue and retry — do not call submit_final_answer yet.
+- Before finishing, verify the scene matches the user's request (e.g. list_placed_instances after placements/moves).
+- Call submit_final_answer only after all intended changes succeeded and you have confirmed them.`;
 
 export const SCENE_AGENT_TOOL_DECLARATIONS: LlmFunctionDeclaration[] = [
   {

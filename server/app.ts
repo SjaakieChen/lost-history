@@ -8,7 +8,6 @@ import {
   LlmCapabilityError,
   AgentMaxStepsError,
 } from './gemini.js';
-import { debugSessionLog } from './debug-session-log.js';
 import type { CallLlmOptions, ChatMessage, SpeedTier } from '../shared/gemini-types.js';
 import type { LandscapeSceneState } from '../shared/scene-agent-types.js';
 import type { GenerateTextOptions } from './gemini/generate-text.js';
@@ -106,13 +105,6 @@ export function createApp() {
       res.json(result);
     } catch (error) {
       if (error instanceof LlmCapabilityError) {
-        // #region agent log
-        debugSessionLog('app.ts:scene-agent', 'capability error', {
-          model: error.model,
-          capability: error.capability,
-          message: error.message,
-        }, 'B');
-        // #endregion
         res.status(400).json({
           error: error.message,
           model: error.model,
@@ -122,13 +114,6 @@ export function createApp() {
       }
 
       if (error instanceof GeminiQuotaError) {
-        // #region agent log
-        debugSessionLog('app.ts:scene-agent', 'quota error', {
-          model: error.model,
-          failureKind: error.failureKind,
-          blockedModels: error.blockedModels,
-        }, 'D');
-        // #endregion
         const retryAfterSec = error.retryAfterMs
           ? Math.ceil(error.retryAfterMs / 1000)
           : undefined;
@@ -146,12 +131,6 @@ export function createApp() {
       }
 
       if (error instanceof AgentMaxStepsError) {
-        // #region agent log
-        debugSessionLog('app.ts:scene-agent', 'max steps', {
-          message: error.message,
-          steps: error.steps.length,
-        }, 'E');
-        // #endregion
         res.status(500).json({
           error: error.message,
           failureKind: 'max_steps',
@@ -161,12 +140,6 @@ export function createApp() {
       }
 
       const message = error instanceof Error ? error.message : 'Unknown error';
-      // #region agent log
-      debugSessionLog('app.ts:scene-agent', 'unhandled error', {
-        message,
-        name: error instanceof Error ? error.name : 'unknown',
-      }, 'E');
-      // #endregion
       res.status(500).json({ error: message });
     }
   });

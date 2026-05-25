@@ -28,7 +28,8 @@ export const LIVE_SCENE_SYSTEM_INSTRUCTION = `You are narrating a tabletop scene
 
 Use get_attribute_object(name_object) to inspect one object's attributes (condition, material, location).
 Use edit_object_attribute(name_object, attribute, value) to repair a damaged attribute.
-When edit_object_attribute returns status "attribute successfully updated", call submit_final_answer with a short summary of what you fixed.`;
+Wait for each tool result before continuing. If a tool fails, retry or adjust before finishing.
+Only call submit_final_answer after edit_object_attribute returns status "attribute successfully updated" and you have verified the repair.`;
 
 export const LIVE_SCENE_USER_PROMPT =
   'The player rips the book. Choose which object to inspect, read its attributes, repair one damaged attribute, then finish.';

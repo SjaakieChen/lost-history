@@ -118,7 +118,7 @@ export function buildFinalAnswerToolDeclaration(
     name,
     description:
       description ??
-      'Submit your final answer when you have enough information. Preferred over replying with plain text.',
+      'Submit your final answer only after all prior tool calls have returned success and you verified the outcome. Preferred over plain text.',
     parameters: normalizeToolParameters({
       type: 'object',
       properties: {

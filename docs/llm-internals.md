@@ -102,9 +102,10 @@ sequenceDiagram
 1. Build from options; inject `submit_final_answer` when `termination` allows.
 2. Loop up to `maxSteps`: `callLlm` with `threadState`, `model: lockedRegistryKey ?? options.model`, and `threadRebuildMessages` from prior steps.
 3. After each success, lock `result.registryKey` (stable registry id, not API id). On **provider change** (Gemini ↔ Groq), re-bootstrap thread via `rebuildThreadForProvider` from portable transcript (text-only; thought signatures are not preserved).
-4. Execute `toolHandlers`; unknown tools get `{ error: '...' }`.
+4. Execute `toolHandlers`; unknown tools get `{ error: '...' }`. Handlers should return `{ ok: true }` / `{ ok: false, error }` (or `{ error }`) so the model can retry.
 5. `toolSequence` restricts one primary tool per step and can reject premature final tool.
-6. Export `messages` via `exportToMessages(baseMessages, steps, options)` with optional `model` on assistant/tool lines.
+6. `buildAgentSystemInstruction` tells the model to read each tool result before continuing and to call `submit_final_answer` only after verified success.
+7. Export `messages` via `exportToMessages(baseMessages, steps, options)` with optional `model` on assistant/tool lines.
 
 Termination: `'final_tool' | 'natural' | 'max_steps'`.
 

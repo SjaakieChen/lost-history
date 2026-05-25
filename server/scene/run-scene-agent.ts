@@ -10,7 +10,6 @@ import {
   SCENE_AGENT_TOOL_DECLARATIONS,
 } from './scene-agent-tools.js';
 import { cloneSceneState } from './scene-state.js';
-import { debugSessionLog } from '../debug-session-log.js';
 
 export interface RunSceneAgentOptions {
   prompt?: string;
@@ -44,17 +43,6 @@ export async function runSceneAgent(options: RunSceneAgentOptions): Promise<Scen
   const sceneState = prepareSceneStateForAgent(options.sceneState);
   const toolHandlers = createSceneToolHandlers(sceneState);
 
-  // #region agent log
-  debugSessionLog('run-scene-agent.ts', 'runSceneAgent input', {
-    requestedModel: options.model ?? null,
-    promptLen: options.prompt?.trim().length ?? 0,
-    messagesLen: options.messages?.length ?? 0,
-    lastMsgRole: options.messages?.at(-1)?.role ?? null,
-    lastMsgPreview: options.messages?.at(-1)?.content?.slice(0, 80) ?? null,
-    instanceCount: sceneState.instances.length,
-  }, 'A');
-  // #endregion
-
   const agentResult = await callLlmAgent({
     model: options.model,
     speedTier: options.speedTier ?? 'moderate',
@@ -66,24 +54,6 @@ export async function runSceneAgent(options: RunSceneAgentOptions): Promise<Scen
     maxSteps: options.maxSteps ?? 12,
     maxOutputTokens: 1024,
   });
-
-  // #region agent log
-  const toolCallCount = agentResult.steps.reduce(
-    (n, s) => n + (s.functionCalls?.length ?? 0),
-    0,
-  );
-  debugSessionLog('run-scene-agent.ts:done', 'runSceneAgent result', {
-    requestedModel: options.model ?? null,
-    registryKey: agentResult.registryKey,
-    apiModel: agentResult.model,
-    modelSelectedBy: agentResult.modelSelectedBy,
-    modelsAttempted: agentResult.modelsAttempted,
-    terminationReason: agentResult.terminationReason,
-    stepCount: agentResult.stepCount,
-    toolCallCount,
-    textLen: agentResult.text?.length ?? 0,
-  }, 'C');
-  // #endregion
 
   return {
     ...agentResult,

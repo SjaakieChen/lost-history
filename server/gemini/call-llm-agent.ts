@@ -113,18 +113,17 @@ function buildAgentSystemInstruction(
 
 
 
+  parts.push(
+    'After each tool call, wait for the tool result in the next turn before continuing. ' +
+      'If a tool response includes ok: false or an error field, fix the problem (retry with corrected arguments or use another tool) before finishing. ' +
+      'Do not end the interaction in the same turn as a mutation tool — verify outcomes first.',
+  );
+
   if (usesFinalAnswerTool(termination)) {
-
     parts.push(
-
-      `When you have enough information, call \`${finalToolName}\` with your final answer. ` +
-
-        'Do not reply with plain text unless you cannot use tools. ' +
-
-        'Plain text without a tool call is accepted only as a fallback.',
-
+      `Only call \`${finalToolName}\` after every intended tool call has succeeded and you have confirmed the results. ` +
+        'Do not reply with plain text unless you cannot use tools; plain text without a tool call is a fallback only.',
     );
-
   }
 
 
@@ -550,9 +549,6 @@ export async function callLlmAgent(options: CallLlmAgentOptions): Promise<CallLl
 
 
   const baseMessages = collectBaseMessages(options);
-  // #region agent log
-  fetch('http://127.0.0.1:7631/ingest/130840d0-116a-49e4-9207-dfd55fe50a73',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b534ab'},body:JSON.stringify({sessionId:'b534ab',location:'call-llm-agent.ts:start',message:'callLlmAgent start',data:{requestedModel:options.model??null,promptLen:options.prompt?.trim().length??0,baseMessagesLen:baseMessages.length,toolRoles:baseMessages.map(m=>m.role),hasToolMessages:baseMessages.some(m=>m.role==='tool')},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
-  // #endregion
 
   const systemInstruction = buildAgentSystemInstruction(
 

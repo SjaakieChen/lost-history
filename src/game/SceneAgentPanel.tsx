@@ -96,9 +96,6 @@ export default function SceneAgentPanel({
       .catch((err: unknown) => {
         const message =
           err instanceof Error ? err.message : 'Failed to load models (is the API server running?)';
-        // #region agent log
-        fetch('http://127.0.0.1:7631/ingest/130840d0-116a-49e4-9207-dfd55fe50a73',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b534ab'},body:JSON.stringify({sessionId:'b534ab',location:'SceneAgentPanel.tsx:loadModels',message:'models fetch failed',data:{error:message},timestamp:Date.now(),hypothesisId:'F'})}).catch(()=>{});
-        // #endregion
         setError(message);
       });
   }, []);
@@ -118,9 +115,6 @@ export default function SceneAgentPanel({
       }
 
       try {
-        // #region agent log
-        fetch('http://127.0.0.1:7631/ingest/130840d0-116a-49e4-9207-dfd55fe50a73',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b534ab'},body:JSON.stringify({sessionId:'b534ab',location:'SceneAgentPanel.tsx:runAgent',message:'scene-agent request payload',data:{selectedModel,historyLen:history.length,outboundLen:outboundMessages.length,lastOutboundRole:outboundMessages.at(-1)?.role??null,userPromptPreview:userPrompt.trim().slice(0,80)},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         const res = await fetch('/api/scene-agent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -159,10 +153,6 @@ export default function SceneAgentPanel({
           );
         }
 
-        // #region agent log
-        fetch('http://127.0.0.1:7631/ingest/130840d0-116a-49e4-9207-dfd55fe50a73',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b534ab'},body:JSON.stringify({sessionId:'b534ab',location:'SceneAgentPanel.tsx:runAgent:response',message:'scene-agent response routing',data:{selectedModel,registryKey:data.registryKey,apiModel:data.model,modelSelectedBy:data.modelSelectedBy,modelsAttempted:data.modelsAttempted,terminationReason:data.terminationReason,stepCount:data.stepCount,textLen:data.text?.length??0},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
-
         if (data.messages?.length) {
           setMessages(data.messages);
         } else {
@@ -172,9 +162,6 @@ export default function SceneAgentPanel({
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Something went wrong';
-        // #region agent log
-        fetch('http://127.0.0.1:7631/ingest/130840d0-116a-49e4-9207-dfd55fe50a73',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b534ab'},body:JSON.stringify({sessionId:'b534ab',location:'SceneAgentPanel.tsx:runAgent:error',message:'scene-agent failed',data:{selectedModel,error:message},timestamp:Date.now(),hypothesisId:'E'})}).catch(()=>{});
-        // #endregion
         setError(message);
       } finally {
         setLoading(false);
